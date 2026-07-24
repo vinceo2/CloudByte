@@ -1,0 +1,19 @@
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+nav {
+  margin-top: 1.5rem;
+}
+
+a {
+  color: #2563eb;
+}
+
+.status {
+  color: #64748b;
+  font-size: 0.9rem;
+}

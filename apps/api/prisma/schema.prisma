@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SharePermission {
+  READ
+  UPLOAD
+  DELETE
+  SHARE
+}
+
+model User {
+  id               String   @id @default(cuid())
+  cognitoSub       String   @unique @map("cognito_sub")
+  email            String   @unique
+  tier             UserTier @default(FREE)
+  storageUsedBytes BigInt   @default(0) @map("storage_used_bytes")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  files      File[]     @relation("OwnedFiles")
+  shares     Share[]    @relation("ShareOwner")
+  auditLogs  AuditLog[]
+
+  @@map("users")
+}
+
+model File {
+  id           String   @id @default(cuid())
+  ownerId      String   @map("owner_id")
+  parentId     String?  @map("parent_id")
+  name         String
+  s3Key        String?  @map("s3_key")
+  previewS3Key String?  @map("preview_s3_key")
+  mimeType     String?  @map("mime_type")
+  sizeBytes    BigInt   @default(0) @map("size_bytes")
+  isFolder     Boolean  @default(false) @map("is_folder")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  owner    User   @relation("OwnedFiles", fields: [ownerId], references: [id], onDelete: Cascade)
+  parent   File?  @relation("FileHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children File[] @relation("FileHierarchy")
+  shares   Share[]
+
+  @@index([ownerId, parentId])
+  @@map("files")
+}
+
+model Share {
+  id            String            @id @default(cuid())
+  resourceId    String            @map("resource_id")
+  ownerId       String            @map("owner_id")
+  granteeEmail  String            @map("grantee_email")
+  granteeUserId String?           @map("grantee_user_id")
+  permissions   SharePermission[]
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  resource File @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  owner    User @relation("ShareOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceId, granteeEmail])
+  @@map("shares")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  action     String
+  resourceId String?  @map("resource_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
