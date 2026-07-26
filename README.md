@@ -22,11 +22,12 @@ Cloud storage web app with hierarchical file organization, sharing, and previews
 
 ```bash
 cp .env.example .env
+cp .env.api.example apps/api/.env
 ```
 
-2. Fill in AWS and Cognito values in the `.env` files.
+1. Fill in AWS and Cognito values in the `.env` files.
 
-3. Install dependencies:
+2. Install dependencies:
 
 ```bash
 npm install
