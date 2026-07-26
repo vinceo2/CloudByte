@@ -44,7 +44,7 @@ services:
     volumes:
       - ./apps/api/src:/app/apps/api/src
       - ./packages/shared/src:/app/packages/shared/src
-      - ~/.aws:~/.aws:ro
+      - ~/.aws:/root/Users/vince/.aws:ro
 
   web:
     build:
