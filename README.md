@@ -22,7 +22,6 @@ Cloud storage web app with hierarchical file organization, sharing, and previews
 
 ```bash
 cp .env.example .env
-cp .env.api.example app/api/.env
 ```
 
 2. Fill in AWS and Cognito values in the `.env` files.
@@ -37,14 +36,7 @@ npm run build --workspace=packages/shared
 4. Start local services and apps:
 
 ```bash
-# Option A: Docker Compose (postgres, redis, api, web)
 docker compose up --build
-
-# Option B: Local dev (faster iteration)
-npm run build
-docker compose up postgres redis -d
-npm run dev:api
-npm run dev:web
 ```
 
 5. Open the web app at http://localhost:5173
