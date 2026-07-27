@@ -31,7 +31,6 @@ model User {
 
   files      File[]     @relation("OwnedFiles")
   shares     Share[]    @relation("ShareOwner")
-  auditLogs  AuditLog[]
 
   @@map("users")
 }
@@ -72,18 +71,4 @@ model Share {
 
   @@unique([resourceId, granteeEmail])
   @@map("shares")
-}
-
-model AuditLog {
-  id         String   @id @default(cuid())
-  userId     String   @map("user_id")
-  action     String
-  resourceId String?  @map("resource_id")
-  metadata   Json?
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@map("audit_logs")
 }
