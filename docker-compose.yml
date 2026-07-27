@@ -32,7 +32,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env
+      - apps/api/.env
     environment:
       DATABASE_URL: postgresql://cloudbyte:cloudbyte@postgres:5432/cloudbyte
       REDIS_URL: redis://redis:6379
@@ -52,6 +52,8 @@ services:
       dockerfile: apps/web/Dockerfile
     ports:
       - "5173:5173"
+    env_file:
+      - apps/web/.env
     environment:
       VITE_API_URL: http://localhost:3000
     depends_on:

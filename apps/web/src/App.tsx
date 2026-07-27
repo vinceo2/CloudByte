@@ -3,14 +3,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { checkHealth } from './lib/api';
 import './App.css';
 import { AuthProvider, useAuth } from 'react-oidc-context';
-
-const cognitoAuthConfig = {
-  authority: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Q0TsexXQo",
-  client_id: "2379vvdglb5j8hopm9tcjr13a5",
-  redirect_uri: "http://localhost:5173/",
-  response_type: "code",
-  scope: "email openid phone",
-};
+import { authProviderConfig, cognitoConfig } from './config/cognito';
 
 function HomePage() {
 
@@ -19,10 +12,7 @@ function HomePage() {
   const signOutRedirect = () => {
     auth.stopSilentRenew();
     auth.removeUser();
-    const clientId = "2379vvdglb5j8hopm9tcjr13a5";
-    const logoutUri = "http://localhost:5173/";
-    const cognitoDomain = "https://us-east-1q0tsexxqo.auth.us-east-1.amazoncognito.com";
-    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
+    window.location.href = `${cognitoConfig.domain}/logout?client_id=${cognitoConfig.clientId}&logout_uri=${encodeURIComponent(cognitoConfig.redirectUri)}`;
   };
 
   if (auth.isLoading) {
@@ -70,10 +60,8 @@ function FilesPage() {
 }
 
 function App() {
-  
-
   return (
-    <AuthProvider {...cognitoAuthConfig}>
+    <AuthProvider {...authProviderConfig}>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HomePage />} />
