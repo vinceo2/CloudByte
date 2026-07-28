@@ -42,6 +42,15 @@ docker compose up --build
 
 5. Open the web app at http://localhost:5173
 
+## Tests
+
+### api:
+
+```bash
+docker compose up -d api
+docker compose exec api npm test -- --runInBand # unit tests
+```
+
 ## Project structure
 
 ```

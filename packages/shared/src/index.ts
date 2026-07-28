@@ -4,10 +4,12 @@ export enum UserTier {
   Enterprise = 'enterprise',
 }
 
+import bytes from 'bytes';
+
 export const TIER_STORAGE_LIMITS: Record<UserTier, number> = {
-  [UserTier.Free]: 10 * 1024 * 1024 * 1024,
-  [UserTier.Pro]: 100 * 1024 * 1024 * 1024,
-  [UserTier.Enterprise]: 1024 * 1024 * 1024 * 1024,
+  [UserTier.Free]: bytes.parse('10gb') as unknown as number,
+  [UserTier.Pro]: bytes.parse('100gb') as unknown as number,
+  [UserTier.Enterprise]: bytes.parse('1tb') as unknown as number,
 };
 
 export enum SharePermission {
