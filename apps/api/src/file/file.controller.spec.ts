@@ -4,7 +4,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { FileController } from './file.controller';
-import { FileService, PresignedUploadResult } from './file.service';
+import { FileService, PresignedDownloadResult, PresignedUploadResult } from './file.service';
+import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { CreatePresignedPostDto, CreatePresignedPostFileDto } from './dto/create-presigned-post.dto';
 
 describe('FileController', () => {
@@ -14,6 +15,7 @@ describe('FileController', () => {
   beforeEach(async () => {
     const mockFileService = {
       createPresignedUploads: jest.fn(),
+      createPresignedDownloads: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -50,6 +52,22 @@ describe('FileController', () => {
       expect(fileService.createPresignedUploads).toHaveBeenCalledWith(user, body.files);
       expect(result).toEqual({ uploads: expectedUploads });
     });
+
+    it('should return download URLs for valid keys', async () => {
+      const user = { cognitoSub: 'user-123', email: 'test@example.com' };
+      const body: CreatePresignedGetDto = { keys: ['user-123/file1.txt', 'user-123/file2.txt'] };
+      const expectedDownloads: PresignedDownloadResult[] = [
+        { key: 'user-123/file1.txt', url: 'https://example.com/download1' },
+        { key: 'user-123/file2.txt', url: 'https://example.com/download2' },
+      ];
+
+      fileService.createPresignedDownloads.mockResolvedValue(expectedDownloads);
+
+      const result = await controller.createDownloadUrls(user as any, body);
+
+      expect(fileService.createPresignedDownloads).toHaveBeenCalledWith(user, body.keys);
+      expect(result).toEqual({ downloads: expectedDownloads });
+    });
   });
 
   describe('dto validation', () => {
@@ -80,6 +98,33 @@ describe('FileController', () => {
 
       expect(errors.length).toBeGreaterThan(0);
       expect(errors[0].property).toBe('files');
+    });
+
+    it('should reject when keys is not an array', async () => {
+      const dto = plainToInstance(CreatePresignedGetDto, { keys: 'not-an-array' });
+
+      const errors = await validate(dto);
+
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('keys');
+    });
+
+    it('should reject when keys is empty', async () => {
+      const dto = plainToInstance(CreatePresignedGetDto, { keys: [] });
+
+      const errors = await validate(dto);
+
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('keys');
+    });
+
+    it('should reject when a key item is not a string', async () => {
+      const dto = plainToInstance(CreatePresignedGetDto, { keys: ['valid-key', 123] });
+
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('keys');
+      expect(errors[0].constraints?.isString).toBeDefined();
     });
   });
 });

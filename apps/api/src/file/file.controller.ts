@@ -1,6 +1,7 @@
-import { Body, Controller, Post, BadRequestException, UseGuards } from '@nestjs/common';
-import { FileService, PresignedUploadResult } from './file.service';
+import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { FileService, PresignedDownloadResult, PresignedUploadResult } from './file.service';
 import { CreatePresignedPostDto } from './dto/create-presigned-post.dto';
+import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -16,5 +17,15 @@ export class FileController {
   ): Promise<{ uploads: PresignedUploadResult[] }> {
     const uploads = await this.fileService.createPresignedUploads(authUser, body.files);
     return { uploads };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('download')
+  async createDownloadUrls(
+    @CurrentUser() authUser: AuthUser,
+    @Body() body: CreatePresignedGetDto,
+  ): Promise<{ downloads: PresignedDownloadResult[] }> {
+    const downloads = await this.fileService.createPresignedDownloads(authUser, body.keys);
+    return { downloads };
   }
 }

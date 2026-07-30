@@ -3,6 +3,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { TIER_STORAGE_LIMITS, UserTier } from '@cloudbyte/shared';
 import { FileService } from './file.service';
 import { AuthService } from '../auth/auth.service';
@@ -11,11 +12,16 @@ jest.mock('@aws-sdk/s3-presigned-post', () => ({
   createPresignedPost: jest.fn(),
 }));
 
+jest.mock('@aws-sdk/s3-request-presigner', () => ({
+  getSignedUrl: jest.fn(),
+}));
+
 describe('FileService', () => {
   let service: FileService;
   let authService: jest.Mocked<AuthService>;
   let configService: jest.Mocked<ConfigService>;
   const createPresignedPostMock = createPresignedPost as jest.MockedFunction<typeof createPresignedPost>;
+  const getSignedUrlMock = getSignedUrl as jest.MockedFunction<typeof getSignedUrl>;
 
   beforeEach(async () => {
     authService = {
@@ -68,6 +74,34 @@ describe('FileService', () => {
       expect(createPresignedPostMock).toHaveBeenCalled();
     },
   );
+
+  it('should return presigned download URLs for valid keys', async () => {
+    getSignedUrlMock.mockResolvedValue('https://example.com/download');
+
+    const result = await service.createPresignedDownloads(
+      { cognitoSub: 'user-1', email: 'user@example.com' },
+      ['user-1/photo.jpg', 'user-1/document.pdf'],
+    );
+
+    expect(result).toEqual([
+      { key: 'user-1/photo.jpg', url: 'https://example.com/download' },
+      { key: 'user-1/document.pdf', url: 'https://example.com/download' },
+    ]);
+    expect(getSignedUrlMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('should throw when a requested download key does not belong to the user', async () => {
+    getSignedUrlMock.mockResolvedValue('https://example.com/download');
+
+    await expect(
+      service.createPresignedDownloads(
+        { cognitoSub: 'user-1', email: 'user@example.com' },
+        ['user-2/photo.jpg'],
+      ),
+    ).rejects.toThrow('Invalid S3 key');
+
+    expect(getSignedUrlMock).not.toHaveBeenCalled();
+  });
 
   it('should throw when there is not enough space for the upload', async () => {
     // make user have only 512 bytes available

@@ -1,13 +1,18 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
-import { randomUUID } from 'crypto';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser } from 'src/auth/current-user.decorator';
 
 export interface PresignedUploadResult {
   name: string;
+  key: string;
+  url: string;
+}
+
+export interface PresignedDownloadResult {
   key: string;
   url: string;
 }
@@ -78,5 +83,31 @@ export class FileService {
     );
 
     return uploads;
+  }
+
+  async createPresignedDownloads(
+    authUser: AuthUser,
+    keys: string[],
+  ): Promise<PresignedDownloadResult[]> {
+    const prefix = `${authUser.cognitoSub}/`;
+
+    const downloads = await Promise.all(
+      keys.map(async (key) => {
+        if (!key.startsWith(prefix)) {
+          throw new BadRequestException('Invalid S3 key');
+        }
+
+        const command = new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        });
+
+        const url = await getSignedUrl(this.s3Client, command, { expiresIn: 900 });
+
+        return { key, url };
+      }),
+    );
+
+    return downloads;
   }
 }
