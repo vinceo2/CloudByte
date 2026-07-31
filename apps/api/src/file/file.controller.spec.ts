@@ -8,6 +8,7 @@ import { FileService, PresignedDownloadResult, PresignedUploadResult } from './f
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { CreatePresignedPostDto, CreatePresignedPostFileDto } from './dto/create-presigned-post.dto';
+import { ListFolderChildrenDto, FolderChildrenOrderBy } from './dto/list-folder-children.dto';
 
 describe('FileController', () => {
   let controller: FileController;
@@ -18,6 +19,7 @@ describe('FileController', () => {
       createPresignedUploads: jest.fn(),
       createPresignedDownloads: jest.fn(),
       createFolder: jest.fn(),
+      listFolderChildren: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -93,6 +95,22 @@ describe('FileController', () => {
 
       expect(fileService.createFolder).toHaveBeenCalledWith(user, body.name, body.parentId);
       expect(result).toEqual(expectedFolder);
+    });
+
+    it('should list folder children with query params', async () => {
+      const user = { cognitoSub: 'user-123', email: 'test@example.com' };
+      const folderId = 'folder-1';
+      const query: ListFolderChildrenDto = { page: 2, orderby: FolderChildrenOrderBy.Name };
+      const expectedChildren = [
+        { id: 'child-1', name: 'File A', isFolder: false, mimeType: 'text/plain', sizeBytes: 123, previewS3Key: null, ownerId: 'user-123', parentId: folderId, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      ];
+
+      fileService.listFolderChildren.mockResolvedValue(expectedChildren);
+
+      const result = await controller.listFolderChildren(user as any, folderId, query);
+
+      expect(fileService.listFolderChildren).toHaveBeenCalledWith(user, folderId, query.page, query.orderby);
+      expect(result).toEqual({ children: expectedChildren });
     });
   });
 

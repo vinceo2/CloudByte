@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export enum FolderChildrenOrderBy {
   CreatedAt = 'createdAt',
@@ -10,10 +10,6 @@ export enum FolderChildrenOrderBy {
 }
 
 export class ListFolderChildrenDto {
-  @IsString()
-  @IsNotEmpty()
-  folderId!: string;
-
   @IsOptional()
   @Type(() => Number)
   @IsInt()

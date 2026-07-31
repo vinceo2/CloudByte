@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { FileService, PresignedDownloadResult, PresignedUploadResult } from './file.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreatePresignedPostDto } from './dto/create-presigned-post.dto';
@@ -42,16 +42,17 @@ export class FileController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post('folders/children')
+  @Get('folders/:folderId')
   async listFolderChildren(
     @CurrentUser() authUser: AuthUser,
-    @Body() body: ListFolderChildrenDto,
+    @Param('folderId') folderId: string,
+    @Query() query: ListFolderChildrenDto,
   ) {
     const children = await this.fileService.listFolderChildren(
       authUser,
-      body.folderId,
-      body.page,
-      body.orderby,
+      folderId,
+      query.page,
+      query.orderby,
     );
     return { children };
   }
