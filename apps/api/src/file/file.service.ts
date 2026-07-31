@@ -5,6 +5,7 @@ import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser } from 'src/auth/current-user.decorator';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface PresignedUploadResult {
   name: string;
@@ -25,6 +26,7 @@ export class FileService {
   constructor(
     private readonly configService: ConfigService,
     private readonly authService: AuthService,
+    private readonly prisma: PrismaService,
   ) {
     const region = this.configService.get<string>('AWS_REGION', 'us-east-1');
     this.bucket = this.configService.get<string>('AWS_S3_BUCKET', '');
@@ -83,6 +85,93 @@ export class FileService {
     );
 
     return uploads;
+  }
+
+  async createFolder(
+    authUser: AuthUser,
+    name: string,
+    parentId?: string,
+  ) {
+    const user = await this.authService.getOrCreateUser(authUser as any);
+
+    if (parentId) {
+      const parent = await this.prisma.file.findUnique({
+        where: { id: parentId },
+      });
+      if (!parent || parent.ownerId !== user.id) {
+        throw new BadRequestException('Invalid parent folder');
+      }
+      if (!parent.isFolder) {
+        throw new BadRequestException('Parent resource must be a folder');
+      }
+    }
+
+    const folder = await this.prisma.file.create({
+      data: {
+        ownerId: user.id,
+        name,
+        parentId: parentId ?? null,
+        isFolder: true,
+      },
+    });
+
+    return {
+      id: folder.id,
+      ownerId: folder.ownerId,
+      parentId: folder.parentId,
+      name: folder.name,
+      isFolder: folder.isFolder,
+      createdAt: folder.createdAt.toISOString(),
+      updatedAt: folder.updatedAt.toISOString(),
+    };
+  }
+
+  async listFolderChildren(
+    authUser: AuthUser,
+    folderId: string,
+    page: number = 1,
+    orderby: 'createdAt' | 'name' | 'mimeType' | 'sizeBytes' | 'updatedAt' = 'createdAt',
+  ) {
+    const user = await this.authService.getOrCreateUser(authUser as any);
+
+    const folder = await this.prisma.file.findUnique({
+      where: { id: folderId },
+    });
+
+    if (!folder || folder.ownerId !== user.id) {
+      throw new BadRequestException('Invalid folder');
+    }
+    if (!folder.isFolder) {
+      throw new BadRequestException('Resource is not a folder');
+    }
+
+    const take = 10;
+    const skip = (page - 1) * take;
+
+    const children = await this.prisma.file.findMany({
+      where: {
+        parentId: folderId,
+        ownerId: user.id,
+      },
+      orderBy: {
+        [orderby]: 'desc',
+      },
+      skip,
+      take,
+    });
+
+    return children.map((child) => ({
+      id: child.id,
+      ownerId: child.ownerId,
+      parentId: child.parentId,
+      name: child.name,
+      isFolder: child.isFolder,
+      mimeType: child.mimeType,
+      sizeBytes: Number(child.sizeBytes) || 0,
+      previewS3Key: child.previewS3Key,
+      createdAt: child.createdAt.toISOString(),
+      updatedAt: child.updatedAt.toISOString(),
+    }));
   }
 
   async createPresignedDownloads(

@@ -5,6 +5,7 @@ import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { FileController } from './file.controller';
 import { FileService, PresignedDownloadResult, PresignedUploadResult } from './file.service';
+import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { CreatePresignedPostDto, CreatePresignedPostFileDto } from './dto/create-presigned-post.dto';
 
@@ -16,6 +17,7 @@ describe('FileController', () => {
     const mockFileService = {
       createPresignedUploads: jest.fn(),
       createPresignedDownloads: jest.fn(),
+      createFolder: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -67,6 +69,30 @@ describe('FileController', () => {
 
       expect(fileService.createPresignedDownloads).toHaveBeenCalledWith(user, body.keys);
       expect(result).toEqual({ downloads: expectedDownloads });
+    });
+
+    it('should create a folder', async () => {
+      const user = { cognitoSub: 'user-123', email: 'test@example.com' };
+      const body: CreateFolderDto = {
+        name: 'My Folder',
+        parentId: 'parent-1',
+      };
+      const expectedFolder = {
+        id: 'folder-1',
+        ownerId: 'user-123',
+        parentId: 'parent-1',
+        name: 'My Folder',
+        isFolder: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      };
+
+      fileService.createFolder.mockResolvedValue(expectedFolder);
+
+      const result = await controller.createFolder(user as any, body);
+
+      expect(fileService.createFolder).toHaveBeenCalledWith(user, body.name, body.parentId);
+      expect(result).toEqual(expectedFolder);
     });
   });
 
@@ -125,6 +151,14 @@ describe('FileController', () => {
       expect(errors.length).toBeGreaterThan(0);
       expect(errors[0].property).toBe('keys');
       expect(errors[0].constraints?.isString).toBeDefined();
+    });
+
+    it('should reject folders without a name', async () => {
+      const dto = plainToInstance(CreateFolderDto, { name: '' });
+
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('name');
     });
   });
 });
