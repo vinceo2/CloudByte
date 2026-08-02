@@ -115,15 +115,7 @@ export class FileService {
       },
     });
 
-    return {
-      id: folder.id,
-      ownerId: folder.ownerId,
-      parentId: folder.parentId,
-      name: folder.name,
-      isFolder: folder.isFolder,
-      createdAt: folder.createdAt.toISOString(),
-      updatedAt: folder.updatedAt.toISOString(),
-    };
+    return folder;
   }
 
   async listFolderChildren(
@@ -160,18 +152,7 @@ export class FileService {
       take,
     });
 
-    return children.map((child) => ({
-      id: child.id,
-      ownerId: child.ownerId,
-      parentId: child.parentId,
-      name: child.name,
-      isFolder: child.isFolder,
-      mimeType: child.mimeType,
-      sizeBytes: Number(child.sizeBytes) || 0,
-      previewS3Key: child.previewS3Key,
-      createdAt: child.createdAt.toISOString(),
-      updatedAt: child.updatedAt.toISOString(),
-    }));
+    return children;
   }
 
   async createPresignedDownloads(

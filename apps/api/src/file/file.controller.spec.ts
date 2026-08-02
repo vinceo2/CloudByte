@@ -9,6 +9,22 @@ import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { CreatePresignedPostDto, CreatePresignedPostFileDto } from './dto/create-presigned-post.dto';
 import { ListFolderChildrenDto, FolderChildrenOrderBy } from './dto/list-folder-children.dto';
+import { CreateFolderResponseDto, ListFolderChildrenResponseDto, FolderResponseDto } from './dto/folder-response.dto';
+
+const buildFolder = (overrides: Record<string, unknown> = {}) => ({
+  id: 'folder-1',
+  ownerId: 'user-123',
+  parentId: null,
+  name: 'My Folder',
+  isFolder: true,
+  mimeType: null,
+  sizeBytes: BigInt(0),
+  s3Key: null,
+  previewS3Key: null,
+  createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  ...overrides,
+});
 
 describe('FileController', () => {
   let controller: FileController;
@@ -56,7 +72,9 @@ describe('FileController', () => {
       expect(fileService.createPresignedUploads).toHaveBeenCalledWith(user, body.files);
       expect(result).toEqual({ uploads: expectedUploads });
     });
+  });
 
+  describe('createDownloadUrls', () => {
     it('should return download URLs for valid keys', async () => {
       const user = { cognitoSub: 'user-123', email: 'test@example.com' };
       const body: CreatePresignedGetDto = { keys: ['user-123/file1.txt', 'user-123/file2.txt'] };
@@ -72,44 +90,62 @@ describe('FileController', () => {
       expect(fileService.createPresignedDownloads).toHaveBeenCalledWith(user, body.keys);
       expect(result).toEqual({ downloads: expectedDownloads });
     });
+  });
 
+  describe('createFolder', () => {
     it('should create a folder', async () => {
       const user = { cognitoSub: 'user-123', email: 'test@example.com' };
       const body: CreateFolderDto = {
         name: 'My Folder',
         parentId: 'parent-1',
       };
-      const expectedFolder = {
-        id: 'folder-1',
-        ownerId: 'user-123',
-        parentId: 'parent-1',
-        name: 'My Folder',
-        isFolder: true,
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      };
+      const folderRecord = buildFolder({ parentId: 'parent-1' });
+      const expectedFolder = plainToInstance(CreateFolderResponseDto, folderRecord, { excludeExtraneousValues: true });
 
-      fileService.createFolder.mockResolvedValue(expectedFolder);
+      fileService.createFolder.mockResolvedValue(folderRecord);
 
       const result = await controller.createFolder(user as any, body);
 
       expect(fileService.createFolder).toHaveBeenCalledWith(user, body.name, body.parentId);
+      expect(result).toBeInstanceOf(CreateFolderResponseDto);
       expect(result).toEqual(expectedFolder);
     });
+  });
 
+  describe('listFolderChildren', () => {
     it('should list folder children with query params', async () => {
       const user = { cognitoSub: 'user-123', email: 'test@example.com' };
       const folderId = 'folder-1';
       const query: ListFolderChildrenDto = { page: 2, orderby: FolderChildrenOrderBy.Name };
-      const expectedChildren = [
-        { id: 'child-1', name: 'File A', isFolder: false, mimeType: 'text/plain', sizeBytes: 123, previewS3Key: null, ownerId: 'user-123', parentId: folderId, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
-      ];
+      const childRecord = buildFolder({
+        id: 'child-1',
+        parentId: folderId,
+        name: 'File A',
+        isFolder: false,
+        mimeType: 'text/plain',
+        sizeBytes: BigInt(123),
+      });
+      const expectedChildren = plainToInstance(FolderResponseDto, [
+        {
+          id: 'child-1',
+          ownerId: 'user-123',
+          parentId: folderId,
+          name: 'File A',
+          isFolder: false,
+          mimeType: 'text/plain',
+          sizeBytes: 123,
+          previewS3Key: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ], { excludeExtraneousValues: true });
 
-      fileService.listFolderChildren.mockResolvedValue(expectedChildren);
+      fileService.listFolderChildren.mockResolvedValue([childRecord]);
 
       const result = await controller.listFolderChildren(user as any, folderId, query);
 
       expect(fileService.listFolderChildren).toHaveBeenCalledWith(user, folderId, query.page, query.orderby);
+      expect(result).toBeInstanceOf(ListFolderChildrenResponseDto);
       expect(result).toEqual({ children: expectedChildren });
     });
   });
