@@ -9,7 +9,8 @@ import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { CreatePresignedPostDto, CreatePresignedPostFileDto } from './dto/create-presigned-post.dto';
 import { ListFolderChildrenDto, FolderChildrenOrderBy } from './dto/list-folder-children.dto';
-import { CreateFolderResponseDto, ListFolderChildrenResponseDto, FolderResponseDto } from './dto/folder-response.dto';
+import { CreateFolderResponseDto, ListFolderChildrenResponseDto, FolderResponseDto, RenameFileResponseDto } from './dto/folder-response.dto';
+import { RenameFileDto } from './dto/rename-file.dto';
 
 const buildFolder = (overrides: Record<string, unknown> = {}) => ({
   id: 'folder-1',
@@ -36,6 +37,7 @@ describe('FileController', () => {
       createPresignedDownloads: jest.fn(),
       createFolder: jest.fn(),
       listFolderChildren: jest.fn(),
+      renameFile: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -150,6 +152,22 @@ describe('FileController', () => {
     });
   });
 
+  describe('renameFile', () => {
+    it('should rename a file and return the updated resource', async () => {
+      const user = { cognitoSub: 'user-123', email: 'test@example.com' };
+      const body: RenameFileDto = { name: 'Renamed File' };
+      const renamedRecord = buildFolder({ id: 'file-1', name: 'Renamed File' });
+
+      fileService.renameFile.mockResolvedValue(renamedRecord);
+
+      const result = await controller.renameFile(user as any, 'file-1', body);
+
+      expect(fileService.renameFile).toHaveBeenCalledWith(user, 'file-1', body.name);
+      expect(result).toBeInstanceOf(RenameFileResponseDto);
+      expect(result).toEqual(plainToInstance(RenameFileResponseDto, renamedRecord, { excludeExtraneousValues: true }));
+    });
+  });
+
   describe('dto validation', () => {
     it('should reject files without a name', async () => {
       const dto = plainToInstance(CreatePresignedPostDto, {
@@ -209,6 +227,14 @@ describe('FileController', () => {
 
     it('should reject folders without a name', async () => {
       const dto = plainToInstance(CreateFolderDto, { name: '' });
+
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('name');
+    });
+
+    it('should reject rename requests with an empty name', async () => {
+      const dto = plainToInstance(RenameFileDto, { name: '' });
 
       const errors = await validate(dto);
       expect(errors.length).toBeGreaterThan(0);

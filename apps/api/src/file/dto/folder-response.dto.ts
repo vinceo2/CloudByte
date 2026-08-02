@@ -38,6 +38,8 @@ export class FolderResponseDto {
 
 export class CreateFolderResponseDto extends FolderResponseDto {}
 
+export class RenameFileResponseDto extends FolderResponseDto {}
+
 export class ListFolderChildrenResponseDto {
   @Expose()
   @Type(() => FolderResponseDto)

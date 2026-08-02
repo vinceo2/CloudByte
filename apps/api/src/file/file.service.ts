@@ -155,6 +155,23 @@ export class FileService {
     return children;
   }
 
+  async renameFile(authUser: AuthUser, fileId: string, name: string) {
+    const user = await this.authService.getOrCreateUser(authUser as any);
+
+    const file = await this.prisma.file.findUnique({
+      where: { id: fileId },
+    });
+
+    if (!file || file.ownerId !== user.id) {
+      throw new BadRequestException('Invalid file');
+    }
+
+    return this.prisma.file.update({
+      where: { id: fileId },
+      data: { name },
+    });
+  }
+
   async createPresignedDownloads(
     authUser: AuthUser,
     keys: string[],

@@ -1,13 +1,15 @@
-import { Body, ClassSerializerInterceptor, Controller, Get, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, ClassSerializerInterceptor, Controller, Get, Param, Post, Put, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { FileService, PresignedDownloadResult, PresignedUploadResult } from './file.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreatePresignedPostDto } from './dto/create-presigned-post.dto';
 import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { ListFolderChildrenDto } from './dto/list-folder-children.dto';
+import { RenameFileDto } from './dto/rename-file.dto';
 import {
   CreateFolderResponseDto,
   ListFolderChildrenResponseDto,
+  RenameFileResponseDto,
 } from './dto/folder-response.dto';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -61,5 +63,16 @@ export class FileController {
       query.orderby,
     );
     return plainToInstance(ListFolderChildrenResponseDto, { children }, { excludeExtraneousValues: true });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put(':fileId')
+  async renameFile(
+    @CurrentUser() authUser: AuthUser,
+    @Param('fileId') fileId: string,
+    @Body() body: RenameFileDto,
+  ): Promise<RenameFileResponseDto> {
+    const file = await this.fileService.renameFile(authUser, fileId, body.name);
+    return plainToInstance(RenameFileResponseDto, file, { excludeExtraneousValues: true });
   }
 }

@@ -43,7 +43,7 @@ describe('FileService', () => {
   let service: FileService;
   let authService: jest.Mocked<AuthService>;
   let configService: jest.Mocked<ConfigService>;
-  let prisma: { file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock } };
+  let prisma: { file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock } };
   const createPresignedPostMock = createPresignedPost as jest.MockedFunction<typeof createPresignedPost>;
   const getSignedUrlMock = getSignedUrl as jest.MockedFunction<typeof getSignedUrl>;
 
@@ -65,6 +65,7 @@ describe('FileService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         findMany: jest.fn(),
+        update: jest.fn(),
       },
     };
 
@@ -240,6 +241,42 @@ describe('FileService', () => {
           'parent-1',
         ),
       ).rejects.toThrow('Parent resource must be a folder');
+    });
+  });
+
+  describe('renameFile', () => {
+    it('should rename a file for the owning user', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      prisma.file.findUnique.mockResolvedValue(buildFolder({ id: 'file-1', name: 'Old Name' }));
+      prisma.file.update.mockResolvedValue(buildFolder({ id: 'file-1', name: 'New Name' }));
+
+      const result = await service.renameFile(
+        { cognitoSub: 'user-1', email: 'user@example.com' },
+        'file-1',
+        'New Name',
+      );
+
+      expect(prisma.file.findUnique).toHaveBeenCalledWith({ where: { id: 'file-1' } });
+      expect(prisma.file.update).toHaveBeenCalledWith({
+        where: { id: 'file-1' },
+        data: { name: 'New Name' },
+      });
+      expect(result.name).toBe('New Name');
+    });
+
+    it('should throw when the file is not owned by the user', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      prisma.file.findUnique.mockResolvedValue(buildFolder({ id: 'file-1', ownerId: 'other-user', name: 'Old Name' }));
+
+      await expect(
+        service.renameFile(
+          { cognitoSub: 'user-1', email: 'user@example.com' },
+          'file-1',
+          'New Name',
+        ),
+      ).rejects.toThrow('Invalid file');
+
+      expect(prisma.file.update).not.toHaveBeenCalled();
     });
   });
 
