@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
@@ -6,6 +7,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AuthService } from '../auth/auth.service';
 import { AuthUser } from 'src/auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { FolderSortOrder } from './dto/FolderSortOrder';
 
 export interface PresignedUploadResult {
   name: string;
@@ -122,7 +124,7 @@ export class FileService {
     authUser: AuthUser,
     folderId: string,
     page: number = 1,
-    orderby: 'createdAt' | 'name' | 'mimeType' | 'sizeBytes' | 'updatedAt' = 'createdAt',
+    orderby: FolderSortOrder = FolderSortOrder.CreatedAt,
   ) {
     const user = await this.authService.getOrCreateUser(authUser as any);
 
@@ -221,6 +223,35 @@ export class FileService {
     return this.prisma.file.delete({
       where: { id: fileId },
     });
+  }
+
+  async searchFiles(
+    authUser: AuthUser,
+    filename: string,
+    page: number = 1,
+    orderby: FolderSortOrder = FolderSortOrder.CreatedAt,
+  ) {
+    const user = await this.authService.getOrCreateUser(authUser as any);
+
+    if (!filename?.trim()) {
+      throw new BadRequestException('filename is required');
+    }
+
+    const take = 10;
+    const skip = (page - 1) * take;
+    const threshold = 0.3;
+
+    const query = `
+      SELECT id, "ownerId", "parentId", name, "isFolder", "mimeType", "sizeBytes", "previewS3Key", "createdAt", "updatedAt"
+      FROM files
+      WHERE "ownerId" = $1
+        AND name % $2
+        AND similarity(name, $2) >= $3
+      ORDER BY CASE WHEN $4 = 'name' THEN name ELSE "${orderby}" END DESC, similarity(name, $2) DESC
+      LIMIT $5 OFFSET $6
+    `;
+
+    return this.prisma.$queryRawUnsafe(query, user.id, filename.trim(), threshold, orderby, take, skip) as Promise<any[]>;
   }
 
   async createPresignedDownloads(

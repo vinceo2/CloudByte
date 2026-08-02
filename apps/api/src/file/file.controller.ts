@@ -7,12 +7,14 @@ import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { ListFolderChildrenDto } from './dto/list-folder-children.dto';
 import { RenameFileDto } from './dto/rename-file.dto';
 import { MoveFileDto } from './dto/move-file.dto';
+import { SearchFilesDto } from './dto/search-files.dto';
 import {
   CreateFolderResponseDto,
   DeleteFileResponseDto,
   ListFolderChildrenResponseDto,
   MoveFileResponseDto,
   RenameFileResponseDto,
+  SearchFilesResponseDto,
 } from './dto/folder-response.dto';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -98,5 +100,20 @@ export class FileController {
   ): Promise<DeleteFileResponseDto> {
     const file = await this.fileService.deleteFile(authUser, fileId);
     return plainToInstance(DeleteFileResponseDto, file, { excludeExtraneousValues: true });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('search')
+  async searchFiles(
+    @CurrentUser() authUser: AuthUser,
+    @Query() query: SearchFilesDto,
+  ): Promise<SearchFilesResponseDto> {
+    const results = await this.fileService.searchFiles(
+      authUser,
+      query.filename,
+      query.page,
+      query.orderby,
+    );
+    return plainToInstance(SearchFilesResponseDto, { results }, { excludeExtraneousValues: true });
   }
 }

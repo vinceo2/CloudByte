@@ -8,10 +8,12 @@ import { FileService, PresignedDownloadResult, PresignedUploadResult } from './f
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { CreatePresignedPostDto, CreatePresignedPostFileDto } from './dto/create-presigned-post.dto';
-import { ListFolderChildrenDto, FolderChildrenOrderBy } from './dto/list-folder-children.dto';
-import { CreateFolderResponseDto, DeleteFileResponseDto, ListFolderChildrenResponseDto, FolderResponseDto, MoveFileResponseDto, RenameFileResponseDto } from './dto/folder-response.dto';
+import { ListFolderChildrenDto } from './dto/list-folder-children.dto';
+import { FolderSortOrder } from './dto/FolderSortOrder';
+import { CreateFolderResponseDto, DeleteFileResponseDto, ListFolderChildrenResponseDto, FolderResponseDto, MoveFileResponseDto, RenameFileResponseDto, SearchFilesResponseDto } from './dto/folder-response.dto';
 import { RenameFileDto } from './dto/rename-file.dto';
 import { MoveFileDto } from './dto/move-file.dto';
+import { SearchFilesDto } from './dto/search-files.dto';
 
 const buildFolder = (overrides: Record<string, unknown> = {}) => ({
   id: 'folder-1',
@@ -41,6 +43,7 @@ describe('FileController', () => {
       renameFile: jest.fn(),
       moveFile: jest.fn(),
       deleteFile: jest.fn(),
+      searchFiles: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -121,7 +124,7 @@ describe('FileController', () => {
     it('should list folder children with query params', async () => {
       const user = { cognitoSub: 'user-123', email: 'test@example.com' };
       const folderId = 'folder-1';
-      const query: ListFolderChildrenDto = { page: 2, orderby: FolderChildrenOrderBy.Name };
+      const query: ListFolderChildrenDto = { page: 2, orderby: FolderSortOrder.Name };
       const childRecord = buildFolder({
         id: 'child-1',
         parentId: folderId,
@@ -189,7 +192,7 @@ describe('FileController', () => {
 
   describe('deleteFile', () => {
     it('should delete a file and return the removed resource', async () => {
-      const user = { cognitoSub: 'user-123', email: 'test@example.com' };
+      const user = { cognitoSub: 'user-123', email: 'test@example.com' }; 
       const deletedRecord = buildFolder({ id: 'file-1', name: 'Deleted File' });
 
       fileService.deleteFile.mockResolvedValue(deletedRecord);
@@ -199,6 +202,22 @@ describe('FileController', () => {
       expect(fileService.deleteFile).toHaveBeenCalledWith(user, 'file-1');
       expect(result).toBeInstanceOf(DeleteFileResponseDto);
       expect(result).toEqual(plainToInstance(DeleteFileResponseDto, deletedRecord, { excludeExtraneousValues: true }));
+    });
+  });
+
+  describe('searchFiles', () => {
+    it('should search files by filename with fuzzy matching and paging', async () => {
+      const user = { cognitoSub: 'user-123', email: 'test@example.com' };
+      const query: SearchFilesDto = { filename: 'doc', page: 2, orderby: FolderSortOrder.Name };
+      const searchResult = buildFolder({ id: 'doc-1', name: 'Document' });
+
+      fileService.searchFiles.mockResolvedValue([searchResult]);
+
+      const result = await controller.searchFiles(user as any, query);
+
+      expect(fileService.searchFiles).toHaveBeenCalledWith(user, query.filename, query.page, query.orderby);
+      expect(result).toBeInstanceOf(SearchFilesResponseDto);
+      expect(result).toEqual(plainToInstance(SearchFilesResponseDto, { results: [searchResult] }, { excludeExtraneousValues: true }));
     });
   });
 

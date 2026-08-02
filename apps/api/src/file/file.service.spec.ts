@@ -43,7 +43,7 @@ describe('FileService', () => {
   let service: FileService;
   let authService: jest.Mocked<AuthService>;
   let configService: jest.Mocked<ConfigService>;
-  let prisma: { file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock; delete: jest.Mock } };
+  let prisma: { file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock; delete: jest.Mock }; $queryRawUnsafe: jest.Mock };
   const createPresignedPostMock = createPresignedPost as jest.MockedFunction<typeof createPresignedPost>;
   const getSignedUrlMock = getSignedUrl as jest.MockedFunction<typeof getSignedUrl>;
 
@@ -68,6 +68,7 @@ describe('FileService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      $queryRawUnsafe: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -348,6 +349,32 @@ describe('FileService', () => {
       ).rejects.toThrow('Invalid file');
 
       expect(prisma.file.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('searchFiles', () => {
+    it('should fuzzy search files and folders for the owning user', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      const expectedRows = [{ id: 'doc-1', name: 'Document', ownerId: 'user-1', parentId: null, isFolder: false }];
+      prisma.$queryRawUnsafe.mockResolvedValue(expectedRows);
+
+      const result = await service.searchFiles(
+        { cognitoSub: 'user-1', email: 'user@example.com' },
+        'doc',
+        2,
+        'name' as any,
+      );
+
+      expect(prisma.$queryRawUnsafe).toHaveBeenCalled();
+      const [query, ownerId, filename, threshold, orderby, take, skip] = prisma.$queryRawUnsafe.mock.calls[0];
+      expect(query).toContain('similarity');
+      expect(ownerId).toBe('user-1');
+      expect(filename).toBe('doc');
+      expect(threshold).toBe(0.3);
+      expect(orderby).toBe('name');
+      expect(take).toBe(10);
+      expect(skip).toBe(10);
+      expect(result).toEqual(expectedRows);
     });
   });
 

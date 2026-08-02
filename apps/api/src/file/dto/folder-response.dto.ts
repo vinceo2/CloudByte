@@ -44,6 +44,12 @@ export class MoveFileResponseDto extends FolderResponseDto {}
 
 export class DeleteFileResponseDto extends FolderResponseDto {}
 
+export class SearchFilesResponseDto {
+  @Expose()
+  @Type(() => FolderResponseDto)
+  results!: FolderResponseDto[];
+}
+
 export class ListFolderChildrenResponseDto {
   @Expose()
   @Type(() => FolderResponseDto)
