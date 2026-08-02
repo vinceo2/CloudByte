@@ -9,7 +9,7 @@ import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { CreatePresignedPostDto, CreatePresignedPostFileDto } from './dto/create-presigned-post.dto';
 import { ListFolderChildrenDto, FolderChildrenOrderBy } from './dto/list-folder-children.dto';
-import { CreateFolderResponseDto, ListFolderChildrenResponseDto, FolderResponseDto, MoveFileResponseDto, RenameFileResponseDto } from './dto/folder-response.dto';
+import { CreateFolderResponseDto, DeleteFileResponseDto, ListFolderChildrenResponseDto, FolderResponseDto, MoveFileResponseDto, RenameFileResponseDto } from './dto/folder-response.dto';
 import { RenameFileDto } from './dto/rename-file.dto';
 import { MoveFileDto } from './dto/move-file.dto';
 
@@ -40,6 +40,7 @@ describe('FileController', () => {
       listFolderChildren: jest.fn(),
       renameFile: jest.fn(),
       moveFile: jest.fn(),
+      deleteFile: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -183,6 +184,21 @@ describe('FileController', () => {
       expect(fileService.moveFile).toHaveBeenCalledWith(user, 'file-1', body.parentId);
       expect(result).toBeInstanceOf(MoveFileResponseDto);
       expect(result).toEqual(plainToInstance(MoveFileResponseDto, movedRecord, { excludeExtraneousValues: true }));
+    });
+  });
+
+  describe('deleteFile', () => {
+    it('should delete a file and return the removed resource', async () => {
+      const user = { cognitoSub: 'user-123', email: 'test@example.com' };
+      const deletedRecord = buildFolder({ id: 'file-1', name: 'Deleted File' });
+
+      fileService.deleteFile.mockResolvedValue(deletedRecord);
+
+      const result = await controller.deleteFile(user as any, 'file-1');
+
+      expect(fileService.deleteFile).toHaveBeenCalledWith(user, 'file-1');
+      expect(result).toBeInstanceOf(DeleteFileResponseDto);
+      expect(result).toEqual(plainToInstance(DeleteFileResponseDto, deletedRecord, { excludeExtraneousValues: true }));
     });
   });
 

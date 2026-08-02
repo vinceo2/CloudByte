@@ -1,4 +1,4 @@
-import { Body, ClassSerializerInterceptor, Controller, Get, Param, Post, Put, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, ClassSerializerInterceptor, Controller, Delete, Get, Param, Post, Put, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { FileService, PresignedDownloadResult, PresignedUploadResult } from './file.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
@@ -9,6 +9,7 @@ import { RenameFileDto } from './dto/rename-file.dto';
 import { MoveFileDto } from './dto/move-file.dto';
 import {
   CreateFolderResponseDto,
+  DeleteFileResponseDto,
   ListFolderChildrenResponseDto,
   MoveFileResponseDto,
   RenameFileResponseDto,
@@ -87,5 +88,15 @@ export class FileController {
   ): Promise<MoveFileResponseDto> {
     const file = await this.fileService.moveFile(authUser, fileId, body.parentId ?? null);
     return plainToInstance(MoveFileResponseDto, file, { excludeExtraneousValues: true });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(':fileId')
+  async deleteFile(
+    @CurrentUser() authUser: AuthUser,
+    @Param('fileId') fileId: string,
+  ): Promise<DeleteFileResponseDto> {
+    const file = await this.fileService.deleteFile(authUser, fileId);
+    return plainToInstance(DeleteFileResponseDto, file, { excludeExtraneousValues: true });
   }
 }

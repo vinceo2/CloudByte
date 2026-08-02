@@ -207,6 +207,22 @@ export class FileService {
     });
   }
 
+  async deleteFile(authUser: AuthUser, fileId: string) {
+    const user = await this.authService.getOrCreateUser(authUser as any);
+
+    const file = await this.prisma.file.findUnique({
+      where: { id: fileId },
+    });
+
+    if (!file || file.ownerId !== user.id) {
+      throw new BadRequestException('Invalid file');
+    }
+
+    return this.prisma.file.delete({
+      where: { id: fileId },
+    });
+  }
+
   async createPresignedDownloads(
     authUser: AuthUser,
     keys: string[],

@@ -43,7 +43,7 @@ describe('FileService', () => {
   let service: FileService;
   let authService: jest.Mocked<AuthService>;
   let configService: jest.Mocked<ConfigService>;
-  let prisma: { file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock } };
+  let prisma: { file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock; delete: jest.Mock } };
   const createPresignedPostMock = createPresignedPost as jest.MockedFunction<typeof createPresignedPost>;
   const getSignedUrlMock = getSignedUrl as jest.MockedFunction<typeof getSignedUrl>;
 
@@ -66,6 +66,7 @@ describe('FileService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
       },
     };
 
@@ -316,6 +317,37 @@ describe('FileService', () => {
       ).rejects.toThrow('Invalid file');
 
       expect(prisma.file.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteFile', () => {
+    it('should delete a file for the owning user', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      prisma.file.findUnique.mockResolvedValue(buildFolder({ id: 'file-1', name: 'Old Name' }));
+      prisma.file.delete.mockResolvedValue(buildFolder({ id: 'file-1', name: 'Old Name' }));
+
+      const result = await service.deleteFile(
+        { cognitoSub: 'user-1', email: 'user@example.com' },
+        'file-1',
+      );
+
+      expect(prisma.file.findUnique).toHaveBeenCalledWith({ where: { id: 'file-1' } });
+      expect(prisma.file.delete).toHaveBeenCalledWith({ where: { id: 'file-1' } });
+      expect(result.id).toBe('file-1');
+    });
+
+    it('should throw when the file is not owned by the user', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      prisma.file.findUnique.mockResolvedValue(buildFolder({ id: 'file-1', ownerId: 'other-user', name: 'Old Name' }));
+
+      await expect(
+        service.deleteFile(
+          { cognitoSub: 'user-1', email: 'user@example.com' },
+          'file-1',
+        ),
+      ).rejects.toThrow('Invalid file');
+
+      expect(prisma.file.delete).not.toHaveBeenCalled();
     });
   });
 
