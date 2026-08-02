@@ -53,7 +53,7 @@ export class FileController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('folders/:folderId')
+  @Get('folders/:folderId/children')
   async listFolderChildren(
     @CurrentUser() authUser: AuthUser,
     @Param('folderId') folderId: string,
@@ -69,7 +69,7 @@ export class FileController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Put(':fileId')
+  @Put(':fileId/rename')
   async renameFile(
     @CurrentUser() authUser: AuthUser,
     @Param('fileId') fileId: string,
