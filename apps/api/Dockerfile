@@ -16,4 +16,4 @@ RUN npm run build --workspace=apps/api
 
 WORKDIR /app/apps/api
 EXPOSE 3000
-CMD ["node", "dist/src/main.js"]
+CMD ["npm", "run", "start:prod"]
