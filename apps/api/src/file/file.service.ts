@@ -172,6 +172,41 @@ export class FileService {
     });
   }
 
+  async moveFile(authUser: AuthUser, fileId: string, parentId: string | null) {
+    const user = await this.authService.getOrCreateUser(authUser as any);
+
+    const file = await this.prisma.file.findUnique({
+      where: { id: fileId },
+    });
+
+    if (!file || file.ownerId !== user.id) {
+      throw new BadRequestException('Invalid file');
+    }
+
+    if (parentId) {
+      const parent = await this.prisma.file.findUnique({
+        where: { id: parentId },
+      });
+
+      if (!parent || parent.ownerId !== user.id) {
+        throw new BadRequestException('Invalid parent folder');
+      }
+
+      if (!parent.isFolder) {
+        throw new BadRequestException('Parent resource must be a folder');
+      }
+
+      if (parent.id === file.id) {
+        throw new BadRequestException('Cannot move a resource into itself');
+      }
+    }
+
+    return this.prisma.file.update({
+      where: { id: fileId },
+      data: { parentId },
+    });
+  }
+
   async createPresignedDownloads(
     authUser: AuthUser,
     keys: string[],

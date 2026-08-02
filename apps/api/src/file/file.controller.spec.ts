@@ -9,8 +9,9 @@ import { CreateFolderDto } from './dto/create-folder.dto';
 import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { CreatePresignedPostDto, CreatePresignedPostFileDto } from './dto/create-presigned-post.dto';
 import { ListFolderChildrenDto, FolderChildrenOrderBy } from './dto/list-folder-children.dto';
-import { CreateFolderResponseDto, ListFolderChildrenResponseDto, FolderResponseDto, RenameFileResponseDto } from './dto/folder-response.dto';
+import { CreateFolderResponseDto, ListFolderChildrenResponseDto, FolderResponseDto, MoveFileResponseDto, RenameFileResponseDto } from './dto/folder-response.dto';
 import { RenameFileDto } from './dto/rename-file.dto';
+import { MoveFileDto } from './dto/move-file.dto';
 
 const buildFolder = (overrides: Record<string, unknown> = {}) => ({
   id: 'folder-1',
@@ -38,6 +39,7 @@ describe('FileController', () => {
       createFolder: jest.fn(),
       listFolderChildren: jest.fn(),
       renameFile: jest.fn(),
+      moveFile: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -165,6 +167,22 @@ describe('FileController', () => {
       expect(fileService.renameFile).toHaveBeenCalledWith(user, 'file-1', body.name);
       expect(result).toBeInstanceOf(RenameFileResponseDto);
       expect(result).toEqual(plainToInstance(RenameFileResponseDto, renamedRecord, { excludeExtraneousValues: true }));
+    });
+  });
+
+  describe('moveFile', () => {
+    it('should move a file and return the updated resource', async () => {
+      const user = { cognitoSub: 'user-123', email: 'test@example.com' };
+      const body: MoveFileDto = { parentId: 'folder-2' };
+      const movedRecord = buildFolder({ id: 'file-1', parentId: 'folder-2', name: 'Moved File' });
+
+      fileService.moveFile.mockResolvedValue(movedRecord);
+
+      const result = await controller.moveFile(user as any, 'file-1', body);
+
+      expect(fileService.moveFile).toHaveBeenCalledWith(user, 'file-1', body.parentId);
+      expect(result).toBeInstanceOf(MoveFileResponseDto);
+      expect(result).toEqual(plainToInstance(MoveFileResponseDto, movedRecord, { excludeExtraneousValues: true }));
     });
   });
 

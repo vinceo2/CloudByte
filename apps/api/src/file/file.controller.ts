@@ -6,9 +6,11 @@ import { CreatePresignedPostDto } from './dto/create-presigned-post.dto';
 import { CreatePresignedGetDto } from './dto/create-presigned-get.dto';
 import { ListFolderChildrenDto } from './dto/list-folder-children.dto';
 import { RenameFileDto } from './dto/rename-file.dto';
+import { MoveFileDto } from './dto/move-file.dto';
 import {
   CreateFolderResponseDto,
   ListFolderChildrenResponseDto,
+  MoveFileResponseDto,
   RenameFileResponseDto,
 } from './dto/folder-response.dto';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
@@ -74,5 +76,16 @@ export class FileController {
   ): Promise<RenameFileResponseDto> {
     const file = await this.fileService.renameFile(authUser, fileId, body.name);
     return plainToInstance(RenameFileResponseDto, file, { excludeExtraneousValues: true });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put(':fileId/move')
+  async moveFile(
+    @CurrentUser() authUser: AuthUser,
+    @Param('fileId') fileId: string,
+    @Body() body: MoveFileDto,
+  ): Promise<MoveFileResponseDto> {
+    const file = await this.fileService.moveFile(authUser, fileId, body.parentId ?? null);
+    return plainToInstance(MoveFileResponseDto, file, { excludeExtraneousValues: true });
   }
 }

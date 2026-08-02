@@ -280,6 +280,45 @@ describe('FileService', () => {
     });
   });
 
+  describe('moveFile', () => {
+    it('should move a file to a valid parent folder', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      prisma.file.findUnique
+        .mockResolvedValueOnce(buildFolder({ id: 'file-1', parentId: null, name: 'Old Name' }))
+        .mockResolvedValueOnce(buildFolder({ id: 'folder-2', ownerId: 'user-1', isFolder: true, name: 'Destination' }));
+      prisma.file.update.mockResolvedValue(buildFolder({ id: 'file-1', parentId: 'folder-2', name: 'Old Name' }));
+
+      const result = await service.moveFile(
+        { cognitoSub: 'user-1', email: 'user@example.com' },
+        'file-1',
+        'folder-2',
+      );
+
+      expect(prisma.file.findUnique).toHaveBeenNthCalledWith(1, { where: { id: 'file-1' } });
+      expect(prisma.file.findUnique).toHaveBeenNthCalledWith(2, { where: { id: 'folder-2' } });
+      expect(prisma.file.update).toHaveBeenCalledWith({
+        where: { id: 'file-1' },
+        data: { parentId: 'folder-2' },
+      });
+      expect(result.parentId).toBe('folder-2');
+    });
+
+    it('should throw when the file is not owned by the user', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      prisma.file.findUnique.mockResolvedValue(buildFolder({ id: 'file-1', ownerId: 'other-user', name: 'Old Name' }));
+
+      await expect(
+        service.moveFile(
+          { cognitoSub: 'user-1', email: 'user@example.com' },
+          'file-1',
+          'folder-2',
+        ),
+      ).rejects.toThrow('Invalid file');
+
+      expect(prisma.file.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listFolderChildren', () => {
     it('should list children for a folder', async () => {
       authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
