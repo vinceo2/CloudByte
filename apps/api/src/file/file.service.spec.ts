@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { TIER_STORAGE_LIMITS, UserTier } from '@cloudbyte/shared';
+import { UploadStatus } from '@prisma/client';
 import { FileService } from './file.service';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -39,11 +40,28 @@ jest.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: jest.fn(),
 }));
 
+jest.mock('@aws-sdk/client-s3', () => {
+  const mockCommand = jest.fn().mockImplementation((input: unknown) => input);
+
+  return {
+    S3Client: jest.fn().mockImplementation(() => ({
+      send: jest.fn().mockResolvedValue({}),
+    })),
+    HeadObjectCommand: mockCommand,
+    GetObjectCommand: mockCommand,
+  };
+});
+
 describe('FileService', () => {
   let service: FileService;
   let authService: jest.Mocked<AuthService>;
   let configService: jest.Mocked<ConfigService>;
-  let prisma: { file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock; delete: jest.Mock }; $queryRawUnsafe: jest.Mock };
+  let prisma: {
+    file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock; delete: jest.Mock };
+    user: { update: jest.Mock };
+    $queryRawUnsafe: jest.Mock;
+    $transaction: jest.Mock;
+  };
   const createPresignedPostMock = createPresignedPost as jest.MockedFunction<typeof createPresignedPost>;
   const getSignedUrlMock = getSignedUrl as jest.MockedFunction<typeof getSignedUrl>;
 
@@ -68,7 +86,11 @@ describe('FileService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
+      user: {
+        update: jest.fn(),
+      },
       $queryRawUnsafe: jest.fn(),
+      $transaction: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -94,14 +116,16 @@ describe('FileService', () => {
       async (tier) => {
         authService.getOrCreateUser.mockResolvedValue(buildUser(tier));
         createPresignedPostMock.mockResolvedValue({ url: 'https://example.com/upload', fields: {} } as any);
+        prisma.file.create.mockResolvedValue({ id: 'file-1', ownerId: 'user-1', name: 'photo.jpg', s3Key: 'user-1/photo.jpg', sizeBytes: 1024, isFolder: false, uploadStatus: UploadStatus.PENDING });
 
         const result = await service.createPresignedUploads(
           { cognitoSub: 'user-1', email: 'user@example.com' },
           [{ name: 'photo.jpg', sizeBytes: 1024 }],
         );
 
-        expect(result).toEqual([{ name: 'photo.jpg', key: expect.any(String), url: 'https://example.com/upload' }]);
+        expect(result).toEqual([{ fileId: 'file-1', name: 'photo.jpg', key: expect.any(String), url: 'https://example.com/upload' }]);
         expect(createPresignedPostMock).toHaveBeenCalled();
+        expect(prisma.file.create).toHaveBeenCalled();
       },
     );
 

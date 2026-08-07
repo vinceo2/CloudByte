@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { UploadStatus } from '@prisma/client';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AuthService } from '../auth/auth.service';
@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FolderSortOrder } from './dto/FolderSortOrder';
 
 export interface PresignedUploadResult {
+  fileId: string;
   name: string;
   key: string;
   url: string;
@@ -78,7 +79,19 @@ export class FileService {
           throw new Error(`Failed to create presigned upload for ${file.name}: ${error instanceof Error ? error.message : String(error)}`);
         }
 
+        const pendingFile = await this.prisma.file.create({
+          data: {
+            ownerId: user.id,
+            name: file.name,
+            s3Key: key,
+            sizeBytes: BigInt(file.sizeBytes),
+            isFolder: false,
+            uploadStatus: UploadStatus.PENDING,
+          },
+        });
+
         return {
+          fileId: pendingFile.id,
           name: file.name,
           key,
           url: presignedPost.url,
