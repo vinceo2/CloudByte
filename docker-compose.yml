@@ -46,6 +46,25 @@ services:
       - ./packages/shared/src:/app/packages/shared/src
       - ~/.aws:/root/Users/vince/.aws:ro
 
+  internal-api:
+    build:
+      context: .
+      dockerfile: apps/internal-api/Dockerfile
+      args:
+        DATABASE_URL: postgresql://cloudbyte:cloudbyte@postgres:5432/cloudbyte
+    ports:
+      - "4000:4000"
+    env_file:
+      - apps/internal-api/.env
+    environment:
+      DATABASE_URL: postgresql://cloudbyte:cloudbyte@postgres:5432/cloudbyte
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/internal-api/src:/app/apps/internal-api/src
+      - ./apps/internal-api/prisma:/app/apps/internal-api/prisma
+
   web:
     build:
       context: .
