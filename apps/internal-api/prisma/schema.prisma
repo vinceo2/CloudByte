@@ -19,6 +19,13 @@ enum UploadStatus {
   PENDING_COMPRESSION
 }
 
+enum CompressionJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id               String   @id @default(cuid())
   cognitoSub       String   @unique @map("cognito_sub")
@@ -76,5 +83,21 @@ model InternalClient {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("internal_clients")
+}
+
+model CompressionJob {
+  id            String                 @id @default(cuid())
+  jobKey        String                 @unique @map("job_key")
+  fileId        String?                @map("file_id")
+  sourceBucket  String?                @map("source_bucket")
+  sourceKey     String?                @map("source_key")
+  status        CompressionJobStatus   @default(PENDING)
+  previewS3Key  String?                @map("preview_s3_key")
+  previewS3Url  String?                @map("preview_s3_url")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  @@index([status, updatedAt])
+  @@map("compression_jobs")
 }
 

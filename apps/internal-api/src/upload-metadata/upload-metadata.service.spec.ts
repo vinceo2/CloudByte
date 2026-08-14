@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { UploadStatus } from '@prisma/client';
 import { UploadMetadataService } from './upload-metadata.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CompressionJobService } from '../compression-job/compression-job.service';
 
 describe('UploadMetadataService', () => {
   let service: UploadMetadataService;
@@ -12,6 +13,11 @@ describe('UploadMetadataService', () => {
       update: jest.Mock;
     };
     user: {
+      update: jest.Mock;
+    };
+    compressionJob?: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
       update: jest.Mock;
     };
   };
@@ -27,10 +33,17 @@ describe('UploadMetadataService', () => {
       },
     };
 
+    const compressionJobService = {
+      reserve: jest.fn().mockResolvedValue({ skipped: false, alreadyCompleted: false, job: { jobKey: 'bucket/key' } }),
+      complete: jest.fn().mockResolvedValue({ jobKey: 'bucket/key' }),
+      fail: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UploadMetadataService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CompressionJobService, useValue: compressionJobService },
       ],
     }).compile();
 
@@ -128,6 +141,46 @@ describe('UploadMetadataService', () => {
       data: { storageUsedBytes: BigInt(27 * 1024 * 1024) },
     });
     expect(result.uploadStatus).toBe(UploadStatus.PENDING_COMPRESSION);
+  });
+
+  it('stores the generated preview key and URL when compression completes', async () => {
+    prisma.file.findFirst.mockResolvedValue({
+      id: 'file-789',
+      s3Key: 'tenant-1/video.mp4',
+      ownerId: 'user-1',
+      owner: { id: 'user-1', storageUsedBytes: BigInt(1 * 1024 * 1024) },
+    });
+
+    prisma.file.update.mockResolvedValue({
+      id: 'file-789',
+      s3Key: 'tenant-1/video.mp4',
+      previewS3Key: 'tenant-1/video-preview.mp4',
+      sizeBytes: BigInt(10 * 1024 * 1024),
+      uploadStatus: UploadStatus.COMPLETED,
+    });
+
+    prisma.user.update.mockResolvedValue({ id: 'user-1', storageUsedBytes: BigInt(11 * 1024 * 1024) });
+
+    const result = await service.processUpload({
+      bucket: 'cloudbyte-files-dev',
+      key: 'tenant-1/video.mp4',
+      sizeBytes: 10 * 1024 * 1024,
+      usedBytesDelta: 10 * 1024 * 1024,
+      uploadStatus: 'COMPLETED',
+      previewS3Key: 'tenant-1/video-preview.mp4',
+      previewS3Url: 'https://cloudbyte-previews-dev.s3.us-east-1.amazonaws.com/tenant-1/video-preview.mp4',
+    });
+
+    expect(prisma.file.update).toHaveBeenCalledWith({
+      where: { id: 'file-789' },
+      data: {
+        sizeBytes: BigInt(10 * 1024 * 1024),
+        uploadStatus: UploadStatus.COMPLETED,
+        previewS3Key: 'tenant-1/video-preview.mp4',
+      },
+    });
+    expect(result.previewS3Key).toBe('tenant-1/video-preview.mp4');
+    expect(result.previewS3Url).toBe('https://cloudbyte-previews-dev.s3.us-east-1.amazonaws.com/tenant-1/video-preview.mp4');
   });
 
   it('throws when the file cannot be found by S3 key', async () => {

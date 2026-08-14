@@ -100,7 +100,9 @@ def _queue_compression_message(bucket_name: str, object_key: str, size_bytes: in
     if not compression_queue_url:
         raise RuntimeError("COMPRESSION_QUEUE_URL environment variable is required for large uploads")
 
+    job_key = f"{bucket_name}/{object_key}"
     queue_payload = {
+        "jobKey": job_key,
         "bucket": bucket_name,
         "key": object_key,
         "sizeBytes": int(size_bytes),

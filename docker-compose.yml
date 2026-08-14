@@ -65,6 +65,26 @@ services:
       - ./apps/internal-api/src:/app/apps/internal-api/src
       - ./apps/internal-api/prisma:/app/apps/internal-api/prisma
 
+  compression-worker:
+    build:
+      context: .
+      dockerfile: apps/compression-worker/Dockerfile
+    env_file:
+      - apps/compression-worker/.env.example
+    environment:
+      AWS_REGION: us-east-1
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      AWS_PREVIEW_BUCKET: ${AWS_PREVIEW_BUCKET:-}
+      COMPRESSION_QUEUE_URL: ${COMPRESSION_QUEUE_URL:-}
+      INTERNAL_API_URL: http://internal-api:4000
+      INTERNAL_API_CLIENT_ID: ${INTERNAL_API_CLIENT_ID:-}
+      INTERNAL_API_CLIENT_SECRET: ${INTERNAL_API_CLIENT_SECRET:-}
+      COMPRESSION_WORKER_POLL_INTERVAL_MS: 2000
+    depends_on:
+      - internal-api
+    volumes:
+      - ./apps/compression-worker/src:/app/apps/compression-worker/src
+
   web:
     build:
       context: .

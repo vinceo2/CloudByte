@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, UploadStatus } from '@prisma/client';
+import { UploadStatus } from '@prisma/client';
+import { CompressionJobService } from '../compression-job/compression-job.service';
 
 interface UploadMetadataInput {
   bucket: string;
@@ -8,12 +9,17 @@ interface UploadMetadataInput {
   sizeBytes: number;
   usedBytesDelta: number;
   uploadStatus: 'COMPLETED' | 'PENDING_COMPRESSION';
+  previewS3Key?: string | null;
+  previewS3Url?: string | null;
   eventType?: string;
 }
 
 @Injectable()
 export class UploadMetadataService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly compressionJobService: CompressionJobService,
+  ) {}
 
   async processUpload(input: UploadMetadataInput) {
     const file = await this.prisma.file.findFirst({
@@ -34,11 +40,40 @@ export class UploadMetadataService {
         ? UploadStatus.COMPLETED
         : UploadStatus.PENDING_COMPRESSION;
 
+    const jobKey = `${input.bucket}/${input.key}`;
+    const reservation = await this.compressionJobService.reserve(jobKey, {
+      fileId: file.id,
+      sourceBucket: input.bucket,
+      sourceKey: input.key,
+    });
+
+    if (reservation.skipped || reservation.alreadyCompleted) {
+      return {
+        fileId: file.id,
+        s3Key: file.s3Key,
+        uploadStatus: file.uploadStatus,
+        sizeBytes: Number(file.sizeBytes),
+        usedBytes: Number(file.owner.storageUsedBytes),
+        previewS3Key: file.previewS3Key ?? input.previewS3Key ?? null,
+        previewS3Url: input.previewS3Url ?? null,
+        bucket: input.bucket,
+        eventType: input.eventType ?? 's3:ObjectCreated:Put',
+      };
+    }
+
+    if (input.uploadStatus === 'COMPLETED' && input.previewS3Key) {
+      await this.compressionJobService.complete(jobKey, {
+        previewS3Key: input.previewS3Key,
+        previewS3Url: input.previewS3Url ?? null,
+      });
+    }
+
     const updatedFile = await this.prisma.file.update({
       where: { id: file.id },
       data: {
         sizeBytes: BigInt(input.sizeBytes),
         uploadStatus: nextStatus,
+        ...(input.previewS3Key ? { previewS3Key: input.previewS3Key } : {}),
       },
     });
 
@@ -58,6 +93,8 @@ export class UploadMetadataService {
       uploadStatus: updatedFile.uploadStatus,
       sizeBytes: Number(updatedFile.sizeBytes),
       usedBytes: Number(nextUsedBytes),
+      previewS3Key: updatedFile.previewS3Key ?? input.previewS3Key ?? null,
+      previewS3Url: input.previewS3Url ?? null,
       bucket: input.bucket,
       eventType: input.eventType ?? 's3:ObjectCreated:Put',
     };

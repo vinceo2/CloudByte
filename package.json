@@ -9,6 +9,7 @@
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:api": "npm run start:dev --workspace=apps/api",
     "dev:internal-api": "npm run start:dev --workspace=apps/internal-api",
+    "dev:compression-worker": "npm run dev --workspace=apps/compression-worker",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
   },

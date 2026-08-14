@@ -15,6 +15,8 @@ export class UploadMetadataBodyDto {
   sizeBytes!: number;
   usedBytesDelta!: number;
   uploadStatus!: 'COMPLETED' | 'PENDING_COMPRESSION';
+  previewS3Key?: string | null;
+  previewS3Url?: string | null;
   eventType?: string;
 }
 
