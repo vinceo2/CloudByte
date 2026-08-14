@@ -23,6 +23,7 @@ enum SharePermission {
 enum UploadStatus {
   PENDING
   COMPLETED
+  PENDING_COMPRESSION
 }
 
 model User {

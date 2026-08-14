@@ -7,6 +7,52 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum UploadStatus {
+  PENDING
+  COMPLETED
+  PENDING_COMPRESSION
+}
+
+model User {
+  id               String   @id @default(cuid())
+  cognitoSub       String   @unique @map("cognito_sub")
+  email            String   @unique
+  tier             UserTier @default(FREE)
+  storageUsedBytes BigInt   @default(0) @map("storage_used_bytes")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  files File[] @relation("OwnedFiles")
+
+  @@map("users")
+}
+
+model File {
+  id           String       @id @default(cuid())
+  ownerId      String       @map("owner_id")
+  parentId     String?      @map("parent_id")
+  name         String
+  s3Key        String?      @map("s3_key")
+  previewS3Key String?      @map("preview_s3_key")
+  mimeType     String?      @map("mime_type")
+  sizeBytes    BigInt       @default(0) @map("size_bytes")
+  isFolder     Boolean      @default(false) @map("is_folder")
+  uploadStatus UploadStatus @default(PENDING) @map("upload_status")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  owner User @relation("OwnedFiles", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, parentId])
+  @@map("files")
+}
+
 model InternalService {
   id          String   @id @default(cuid())
   name        String   @unique
@@ -31,3 +77,4 @@ model InternalClient {
 
   @@map("internal_clients")
 }
+
