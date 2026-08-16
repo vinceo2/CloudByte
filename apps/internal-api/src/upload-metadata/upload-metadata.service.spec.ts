@@ -10,11 +10,14 @@ describe('UploadMetadataService', () => {
   let prisma: {
     file: {
       findFirst: jest.Mock;
+      findMany: jest.Mock;
       update: jest.Mock;
+      deleteMany: jest.Mock;
     };
     user: {
       update: jest.Mock;
     };
+    $transaction: jest.Mock;
     compressionJob?: {
       findUnique: jest.Mock;
       create: jest.Mock;
@@ -26,12 +29,18 @@ describe('UploadMetadataService', () => {
     prisma = {
       file: {
         findFirst: jest.fn(),
+        findMany: jest.fn(),
         update: jest.fn(),
+        deleteMany: jest.fn(),
       },
       user: {
         update: jest.fn(),
       },
+      $transaction: jest.fn(),
     };
+    prisma.$transaction.mockImplementation(
+      (callback: (transaction: typeof prisma) => unknown) => callback(prisma),
+    );
 
     const compressionJobService = {
       reserve: jest.fn().mockResolvedValue({ skipped: false, alreadyCompleted: false, job: { jobKey: 'bucket/key' } }),
@@ -198,5 +207,42 @@ describe('UploadMetadataService', () => {
 
     expect(prisma.file.update).not.toHaveBeenCalled();
     expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('deletes stale non-completed uploads but only decrements storage for pending compression rows', async () => {
+    prisma.file.findMany.mockResolvedValue([
+      { id: 'file-1', ownerId: 'user-1', sizeBytes: BigInt(4096), uploadStatus: UploadStatus.PENDING },
+      { id: 'file-2', ownerId: 'user-1', sizeBytes: BigInt(2048), uploadStatus: UploadStatus.PENDING_COMPRESSION },
+      { id: 'file-3', ownerId: 'user-2', sizeBytes: BigInt(1024), uploadStatus: UploadStatus.PENDING_COMPRESSION },
+    ]);
+    prisma.file.deleteMany.mockResolvedValue({ count: 3 });
+
+    const result = await service.deleteStalePendingUploads();
+
+    expect(prisma.file.findMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        createdAt: { lt: expect.any(Date) },
+        uploadStatus: { not: UploadStatus.COMPLETED },
+      }),
+      select: { id: true, ownerId: true, sizeBytes: true, uploadStatus: true },
+    });
+    expect(prisma.user.update).toHaveBeenCalledTimes(2);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { storageUsedBytes: { decrement: BigInt(2048) } },
+    });
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-2' },
+      data: { storageUsedBytes: { decrement: BigInt(1024) } },
+    });
+    expect(prisma.file.deleteMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        uploadStatus: { not: UploadStatus.COMPLETED },
+      }),
+    });
+    expect(result).toEqual({
+      deletedCount: 3,
+      cutoff: expect.any(String),
+    });
   });
 });

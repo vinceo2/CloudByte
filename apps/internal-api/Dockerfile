@@ -14,9 +14,10 @@ COPY apps/internal-api/prisma ./apps/internal-api/prisma
 COPY apps/internal-api/prisma.config.ts ./apps/internal-api/prisma.config.ts
 COPY apps/internal-api/src ./apps/internal-api/src
 
-RUN npm install
+RUN npm install --workspaces --include-workspace-root
 
 WORKDIR /app/apps/internal-api
+RUN npm install
 RUN npx prisma generate
 
 EXPOSE 4000

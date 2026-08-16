@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -29,5 +30,11 @@ export class UploadMetadataController {
   @RequirePermissions('uploads:write')
   async create(@Body() body: UploadMetadataBodyDto) {
     return this.service.processUpload(body);
+  }
+
+  @Delete('pending')
+  @RequirePermissions('uploads:cleanup')
+  async deleteStalePending() {
+    return this.service.deleteStalePendingUploads();
   }
 }

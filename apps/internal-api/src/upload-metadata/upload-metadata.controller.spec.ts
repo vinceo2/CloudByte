@@ -7,11 +7,12 @@ import { PermissionsGuard } from '../internal-auth/permissions.guard';
 
 describe('UploadMetadataController', () => {
   let controller: UploadMetadataController;
-  let service: { processUpload: jest.Mock };
+  let service: { processUpload: jest.Mock; deleteStalePendingUploads: jest.Mock };
 
   beforeEach(async () => {
     service = {
       processUpload: jest.fn(),
+      deleteStalePendingUploads: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -59,5 +60,18 @@ describe('UploadMetadataController', () => {
 
     expect(authGuard).toBeInstanceOf(InternalAuthGuard);
     expect(permissionsGuard).toBeInstanceOf(PermissionsGuard);
+  });
+
+  it('delegates stale pending upload cleanup to the service', async () => {
+    service.deleteStalePendingUploads.mockResolvedValue({
+      deletedCount: 2,
+      cutoff: '2026-08-16T00:00:00.000Z',
+    });
+
+    await expect(controller.deleteStalePending()).resolves.toEqual({
+      deletedCount: 2,
+      cutoff: '2026-08-16T00:00:00.000Z',
+    });
+    expect(service.deleteStalePendingUploads).toHaveBeenCalledTimes(1);
   });
 });

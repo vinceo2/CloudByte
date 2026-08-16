@@ -46,3 +46,13 @@ Copy access key and secret into root `.env`.
 ## Future
 
 CDK stacks for Cognito, S3, RDS, and ECS/Fargate will replace manual setup.
+
+## Pending upload cleanup Lambda
+
+Deploy `lambdas/pending_file_cleanup` with the handler `handler.handler` and an EventBridge schedule (for example, once per hour). Configure:
+
+- `INTERNAL_API_URL`: internal API base URL, without the `/upload-metadata/pending` path
+- `INTERNAL_API_CLIENT_ID`
+- `INTERNAL_API_CLIENT_SECRET`
+
+The corresponding internal API client needs the `uploads:cleanup` permission. Each invocation deletes files created more than 12 hours earlier whose upload status is not `COMPLETED`, and releases their reserved storage usage.

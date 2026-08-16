@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UploadStatus } from '@prisma/client';
+import { Prisma, UploadStatus } from '@prisma/client';
 import { CompressionJobService } from '../compression-job/compression-job.service';
 
 interface UploadMetadataInput {
@@ -98,5 +98,49 @@ export class UploadMetadataService {
       bucket: input.bucket,
       eventType: input.eventType ?? 's3:ObjectCreated:Put',
     };
+  }
+
+  async deleteStalePendingUploads() {
+    const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const where = {
+      createdAt: { lt: cutoff },
+      uploadStatus: { not: UploadStatus.COMPLETED },
+    };
+
+    return this.prisma.$transaction(async (transaction) => {
+      const staleFiles = await transaction.file.findMany({
+        where,
+        select: { id: true, ownerId: true, sizeBytes: true, uploadStatus: true },
+      });
+
+      const chargedBytesByOwner = staleFiles.reduce<Map<string, bigint>>((totals, file) => {
+        if (file.uploadStatus !== UploadStatus.PENDING_COMPRESSION) {
+          return totals;
+        }
+
+        totals.set(file.ownerId, (totals.get(file.ownerId) ?? BigInt(0)) + file.sizeBytes);
+        return totals;
+      }, new Map());
+
+      await Promise.all(
+        [...chargedBytesByOwner].map(([ownerId, chargedBytes]) =>
+          transaction.user.update({
+            where: { id: ownerId },
+            data: {
+              storageUsedBytes: { decrement: chargedBytes },
+            },
+          }),
+        ),
+      );
+
+      const deletion = await transaction.file.deleteMany({ where });
+
+      return {
+        deletedCount: deletion.count,
+        cutoff: cutoff.toISOString(),
+      };
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
   }
 }
