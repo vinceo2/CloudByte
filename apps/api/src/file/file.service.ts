@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GetObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { UploadStatus } from '@prisma/client';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -25,6 +25,7 @@ export interface PresignedDownloadResult {
 export class FileService {
   private readonly s3Client: S3Client;
   private readonly bucket: string;
+  private readonly previewBucket: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -33,12 +34,22 @@ export class FileService {
   ) {
     const region = this.configService.get<string>('AWS_REGION', 'us-east-1');
     this.bucket = this.configService.get<string>('AWS_S3_BUCKET', '');
+    this.previewBucket = this.configService.get<string>('AWS_PREVIEW_BUCKET', '');
 
     if (!this.bucket) {
       throw new Error('Missing required AWS_S3_BUCKET environment variable');
     }
 
     this.s3Client = new S3Client({ region });
+  }
+
+  private async deleteS3Object(bucket: string, key: string | null | undefined) {
+    if (!bucket || !key) {
+      return;
+    }
+
+    const command = new DeleteObjectCommand({ Bucket: bucket, Key: key });
+    await this.s3Client.send(command);
   }
 
   async createPresignedUploads(
@@ -233,9 +244,32 @@ export class FileService {
       throw new BadRequestException('Invalid file');
     }
 
-    return this.prisma.file.delete({
-      where: { id: fileId },
+    if (file.isFolder) {
+      throw new BadRequestException('Use the folder delete route for folders');
+    }
+
+    const fileSize = BigInt(file.sizeBytes ?? 0);
+
+    await this.deleteS3Object(this.bucket, file.s3Key);
+    await this.deleteS3Object(this.previewBucket, file.previewS3Key);
+
+    const updatedUser = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id: user.id },
+        data: {
+          storageUsedBytes: BigInt(user.storageUsedBytes) - fileSize,
+        },
+      });
+
+      await tx.file.delete({ where: { id: fileId } });
+
+      return updated;
     });
+
+    return {
+      ...file,
+      storageUsedBytes: updatedUser.storageUsedBytes,
+    };
   }
 
   async searchFiles(

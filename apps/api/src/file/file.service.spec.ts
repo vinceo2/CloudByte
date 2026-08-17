@@ -49,6 +49,7 @@ jest.mock('@aws-sdk/client-s3', () => {
     })),
     HeadObjectCommand: mockCommand,
     GetObjectCommand: mockCommand,
+    DeleteObjectCommand: mockCommand,
   };
 });
 
@@ -92,6 +93,10 @@ describe('FileService', () => {
       $queryRawUnsafe: jest.fn(),
       $transaction: jest.fn(),
     };
+
+    prismaService.$transaction.mockImplementation(async (callback: (tx: typeof prismaService) => Promise<any>) => {
+      return callback(prismaService);
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -346,10 +351,19 @@ describe('FileService', () => {
   });
 
   describe('deleteFile', () => {
-    it('should delete a file for the owning user', async () => {
-      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
-      prisma.file.findUnique.mockResolvedValue(buildFolder({ id: 'file-1', name: 'Old Name' }));
-      prisma.file.delete.mockResolvedValue(buildFolder({ id: 'file-1', name: 'Old Name' }));
+    it('should delete a file for the owning user and decrement storage', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 25_000));
+      prisma.file.findUnique.mockResolvedValue({
+        id: 'file-1',
+        ownerId: 'user-1',
+        isFolder: false,
+        name: 'Old Name',
+        s3Key: 'user-1/old-name.txt',
+        previewS3Key: 'user-1/old-name.preview.jpg',
+        sizeBytes: 10_000,
+      });
+      prisma.user.update.mockResolvedValue({ id: 'user-1', storageUsedBytes: BigInt(15_000) });
+      prisma.file.delete.mockResolvedValue({ id: 'file-1', name: 'Old Name' });
 
       const result = await service.deleteFile(
         { cognitoSub: 'user-1', email: 'user@example.com' },
@@ -357,8 +371,28 @@ describe('FileService', () => {
       );
 
       expect(prisma.file.findUnique).toHaveBeenCalledWith({ where: { id: 'file-1' } });
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { storageUsedBytes: BigInt(15_000) },
+      });
       expect(prisma.file.delete).toHaveBeenCalledWith({ where: { id: 'file-1' } });
       expect(result.id).toBe('file-1');
+      expect(result.storageUsedBytes).toBe(BigInt(15_000));
+    });
+
+    it('should reject deleting a folder', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      prisma.file.findUnique.mockResolvedValue(buildFolder({ id: 'folder-1', isFolder: true, name: 'Folder' }));
+
+      await expect(
+        service.deleteFile(
+          { cognitoSub: 'user-1', email: 'user@example.com' },
+          'folder-1',
+        ),
+      ).rejects.toThrow('Use the folder delete route for folders');
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.file.delete).not.toHaveBeenCalled();
     });
 
     it('should throw when the file is not owned by the user', async () => {
@@ -372,6 +406,7 @@ describe('FileService', () => {
         ),
       ).rejects.toThrow('Invalid file');
 
+      expect(prisma.user.update).not.toHaveBeenCalled();
       expect(prisma.file.delete).not.toHaveBeenCalled();
     });
   });
