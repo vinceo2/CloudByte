@@ -100,5 +100,30 @@ services:
     volumes:
       - ./apps/web/src:/app/apps/web/src
 
+  s3-upload-metadata-lambda:
+    build:
+      context: ./infra/lambdas/s3_upload_metadata
+      dockerfile: Dockerfile
+    environment:
+      AWS_REGION: us-east-1
+      INTERNAL_API_URL: http://internal-api:4000
+      INTERNAL_API_CLIENT_ID: ${INTERNAL_API_CLIENT_ID:-}
+      INTERNAL_API_CLIENT_SECRET: ${INTERNAL_API_CLIENT_SECRET:-}
+      COMPRESSION_QUEUE_URL: ${COMPRESSION_QUEUE_URL:-}
+      UPLOAD_SIZE_THRESHOLD_BYTES: ${UPLOAD_SIZE_THRESHOLD_BYTES:-20971520}
+    depends_on:
+      - internal-api
+
+  pending-file-cleanup-lambda:
+    build:
+      context: ./infra/lambdas/pending_file_cleanup
+      dockerfile: Dockerfile
+    environment:
+      INTERNAL_API_URL: http://internal-api:4000
+      INTERNAL_API_CLIENT_ID: ${INTERNAL_API_CLIENT_ID:-}
+      INTERNAL_API_CLIENT_SECRET: ${INTERNAL_API_CLIENT_SECRET:-}
+    depends_on:
+      - internal-api
+
 volumes:
   postgres_data:
