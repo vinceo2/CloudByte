@@ -93,6 +93,15 @@ export class FileController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Delete('folders/:folderId')
+  async deleteFolder(
+    @CurrentUser() authUser: AuthUser,
+    @Param('folderId') folderId: string,
+  ) {
+    return this.fileService.deleteFolder(authUser, folderId);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Delete(':fileId')
   async deleteFile(
     @CurrentUser() authUser: AuthUser,

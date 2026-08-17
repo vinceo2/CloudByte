@@ -42,6 +42,7 @@ describe('FileController', () => {
       listFolderChildren: jest.fn(),
       renameFile: jest.fn(),
       moveFile: jest.fn(),
+      deleteFolder: jest.fn(),
       deleteFile: jest.fn(),
       searchFiles: jest.fn(),
     };
@@ -187,6 +188,20 @@ describe('FileController', () => {
       expect(fileService.moveFile).toHaveBeenCalledWith(user, 'file-1', body.parentId);
       expect(result).toBeInstanceOf(MoveFileResponseDto);
       expect(result).toEqual(plainToInstance(MoveFileResponseDto, movedRecord, { excludeExtraneousValues: true }));
+    });
+  });
+
+  describe('deleteFolder', () => {
+    it('should reparent children and delete a folder', async () => {
+      const user = { cognitoSub: 'user-123', email: 'test@example.com' };
+      const deletedFolder = buildFolder({ id: 'folder-2', parentId: 'folder-1', isFolder: true, name: 'Nested Folder' });
+
+      fileService.deleteFolder.mockResolvedValue(deletedFolder);
+
+      const result = await controller.deleteFolder(user as any, 'folder-2');
+
+      expect(fileService.deleteFolder).toHaveBeenCalledWith(user, 'folder-2');
+      expect(result).toEqual(deletedFolder);
     });
   });
 

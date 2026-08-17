@@ -272,6 +272,38 @@ export class FileService {
     };
   }
 
+  async deleteFolder(authUser: AuthUser, folderId: string) {
+    const user = await this.authService.getOrCreateUser(authUser as any);
+
+    const folder = await this.prisma.file.findUnique({
+      where: { id: folderId },
+    });
+
+    if (!folder || folder.ownerId !== user.id) {
+      throw new BadRequestException('Invalid folder');
+    }
+
+    if (!folder.isFolder) {
+      throw new BadRequestException('Resource is not a folder');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.file.updateMany({
+        where: {
+          parentId: folderId,
+          ownerId: user.id,
+        },
+        data: {
+          parentId: folder.parentId,
+        },
+      });
+
+      return tx.file.delete({
+        where: { id: folderId },
+      });
+    });
+  }
+
   async searchFiles(
     authUser: AuthUser,
     filename: string,

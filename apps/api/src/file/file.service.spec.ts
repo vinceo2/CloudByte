@@ -58,7 +58,7 @@ describe('FileService', () => {
   let authService: jest.Mocked<AuthService>;
   let configService: jest.Mocked<ConfigService>;
   let prisma: {
-    file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock; delete: jest.Mock };
+    file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock; updateMany: jest.Mock; delete: jest.Mock };
     user: { update: jest.Mock };
     $queryRawUnsafe: jest.Mock;
     $transaction: jest.Mock;
@@ -85,6 +85,7 @@ describe('FileService', () => {
         create: jest.fn(),
         findMany: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
         delete: jest.fn(),
       },
       user: {
@@ -407,6 +408,47 @@ describe('FileService', () => {
       ).rejects.toThrow('Invalid file');
 
       expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.file.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteFolder', () => {
+    it('should reparent child records and delete the folder', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      prisma.file.findUnique.mockResolvedValue(buildFolder({ id: 'folder-2', parentId: 'folder-1', isFolder: true, name: 'Nested Folder' }));
+      prisma.file.updateMany.mockResolvedValue({ count: 2 });
+      prisma.file.delete.mockResolvedValue(buildFolder({ id: 'folder-2', parentId: 'folder-1', isFolder: true, name: 'Nested Folder' }));
+
+      const result = await service.deleteFolder(
+        { cognitoSub: 'user-1', email: 'user@example.com' },
+        'folder-2',
+      );
+
+      expect(prisma.file.updateMany).toHaveBeenCalledWith({
+        where: {
+          parentId: 'folder-2',
+          ownerId: 'user-1',
+        },
+        data: {
+          parentId: 'folder-1',
+        },
+      });
+      expect(prisma.file.delete).toHaveBeenCalledWith({ where: { id: 'folder-2' } });
+      expect(result.id).toBe('folder-2');
+    });
+
+    it('should reject deleting a non-folder resource', async () => {
+      authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
+      prisma.file.findUnique.mockResolvedValue(buildFolder({ id: 'file-1', isFolder: false, name: 'File', parentId: null }));
+
+      await expect(
+        service.deleteFolder(
+          { cognitoSub: 'user-1', email: 'user@example.com' },
+          'file-1',
+        ),
+      ).rejects.toThrow('Resource is not a folder');
+
+      expect(prisma.file.updateMany).not.toHaveBeenCalled();
       expect(prisma.file.delete).not.toHaveBeenCalled();
     });
   });
