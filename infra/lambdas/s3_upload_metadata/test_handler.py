@@ -42,14 +42,14 @@ class S3UploadMetadataHandlerTests(unittest.TestCase):
     @patch("handler.boto3.client")
     def test_exact_threshold_enqueues_compression(self, mock_boto3_client, mock_post):
         mock_post.return_value = MagicMock(status_code=200, content=b'{"ok": true}', json=lambda: {"ok": True})
-        mock_boto3_client.return_value.head_object.return_value = {"ContentLength": 20 * 1024 * 1024}
+        mock_boto3_client.return_value.head_object.return_value = {"ContentLength": 20 * 1024 * 1024, "ContentType": "image/jpeg"}
 
         event = {
             "Records": [
                 {
                     "s3": {
                         "bucket": {"name": "cloudbyte-files-dev"},
-                        "object": {"key": "user-123/limit.bin", "size": 20 * 1024 * 1024},
+                        "object": {"key": "user-123/limit.jpg", "size": 20 * 1024 * 1024},
                     }
                 }
             ]
@@ -65,7 +65,7 @@ class S3UploadMetadataHandlerTests(unittest.TestCase):
     @patch("handler.boto3.client")
     def test_over_threshold_enqueues_compression(self, mock_boto3_client, mock_post):
         mock_post.return_value = MagicMock(status_code=200, content=b'{"ok": true}', json=lambda: {"ok": True})
-        mock_boto3_client.return_value.head_object.return_value = {"ContentLength": 25 * 1024 * 1024}
+        mock_boto3_client.return_value.head_object.return_value = {"ContentLength": 25 * 1024 * 1024, "ContentType": "video/mp4"}
 
         event = {
             "Records": [
@@ -83,6 +83,29 @@ class S3UploadMetadataHandlerTests(unittest.TestCase):
         self.assertEqual(result["results"][0]["uploadStatus"], "PENDING_COMPRESSION")
         mock_post.assert_called_once()
         mock_boto3_client.return_value.send_message.assert_called_once()
+
+    @patch("handler.requests.post")
+    @patch("handler.boto3.client")
+    def test_over_threshold_non_media_does_not_enqueue_compression(self, mock_boto3_client, mock_post):
+        mock_post.return_value = MagicMock(status_code=200, content=b'{"ok": true}', json=lambda: {"ok": True})
+        mock_boto3_client.return_value.head_object.return_value = {"ContentLength": 25 * 1024 * 1024, "ContentType": "application/pdf"}
+
+        event = {
+            "Records": [
+                {
+                    "s3": {
+                        "bucket": {"name": "cloudbyte-files-dev"},
+                        "object": {"key": "user-123/report.pdf", "size": 25 * 1024 * 1024},
+                    }
+                }
+            ]
+        }
+
+        result = handler.handler(event, None)
+
+        self.assertEqual(result["results"][0]["uploadStatus"], "COMPLETED")
+        mock_post.assert_called_once()
+        mock_boto3_client.return_value.send_message.assert_not_called()
 
 
 if __name__ == "__main__":

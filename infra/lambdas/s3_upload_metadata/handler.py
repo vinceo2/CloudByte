@@ -62,13 +62,42 @@ def _read_event_size(bucket_name: str, object_key: str) -> int:
     return int(response.get("ContentLength", 0))
 
 
-def _update_metadata_api(bucket_name: str, object_key: str, size_bytes: int) -> Dict[str, Any]:
+def _get_object_mime_type(bucket_name: str, object_key: str) -> str:
+    s3_client = _get_s3_client()
+    response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
+    content_type = (response.get("ContentType") or "").strip().lower()
+    if content_type:
+        return content_type
+
+    extension = os.path.splitext(object_key)[1].lower()
+    extension_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+        ".mp4": "video/mp4",
+        ".mov": "video/quicktime",
+        ".avi": "video/x-msvideo",
+        ".mkv": "video/x-matroska",
+        ".webm": "video/webm",
+    }
+    return extension_map.get(extension, "")
+
+
+def _is_media_for_compression(mime_type: str) -> bool:
+    return mime_type.startswith("image/") or mime_type.startswith("video/")
+
+
+def _update_metadata_api(bucket_name: str, object_key: str, size_bytes: int, mime_type: str) -> Dict[str, Any]:
     internal_api_url = _get_internal_api_url()
     if not internal_api_url:
         raise RuntimeError("INTERNAL_API_URL environment variable is required")
 
     threshold_bytes = _get_threshold_bytes()
-    upload_status = "COMPLETED" if size_bytes < threshold_bytes else "PENDING_COMPRESSION"
+    should_compress = size_bytes >= threshold_bytes and _is_media_for_compression(mime_type)
+    upload_status = "PENDING_COMPRESSION" if should_compress else "COMPLETED"
 
     payload = {
         "bucket": bucket_name,
@@ -134,29 +163,33 @@ def _process_record(record: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"Invalid S3 event record: {record}")
 
     size_bytes = int(s3_data.get("object", {}).get("size", 0) or _read_event_size(bucket_name, object_key))
-    metadata_response = _update_metadata_api(bucket_name, object_key, size_bytes)
+    mime_type = _get_object_mime_type(bucket_name, object_key)
+    metadata_response = _update_metadata_api(bucket_name, object_key, size_bytes, mime_type)
 
-    if size_bytes < _get_threshold_bytes():
+    if size_bytes < _get_threshold_bytes() or not _is_media_for_compression(mime_type):
         LOG.info(
-            "Upload is below the threshold; marking complete for %s/%s (%s bytes)",
+            "Upload does not require compression for %s/%s (%s bytes, %s)",
             bucket_name,
             object_key,
             size_bytes,
+            mime_type or "unknown",
         )
         return {
             "bucket": bucket_name,
             "key": object_key,
             "sizeBytes": size_bytes,
             "uploadStatus": "COMPLETED",
+            "mimeType": mime_type,
             "metadataApi": metadata_response,
         }
 
     queue_response = _queue_compression_message(bucket_name, object_key, size_bytes)
     LOG.info(
-        "Upload exceeds threshold; queued compression for %s/%s (%s bytes)",
+        "Upload exceeds threshold and is media; queued compression for %s/%s (%s bytes, %s)",
         bucket_name,
         object_key,
         size_bytes,
+        mime_type,
     )
 
     return {
@@ -164,6 +197,7 @@ def _process_record(record: Dict[str, Any]) -> Dict[str, Any]:
         "key": object_key,
         "sizeBytes": size_bytes,
         "uploadStatus": "PENDING_COMPRESSION",
+        "mimeType": mime_type,
         "metadataApi": metadata_response,
         "sqs": queue_response,
     }
