@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { UploadStatus } from '@prisma/client';
+import { Prisma, UploadStatus } from '@prisma/client';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AuthService } from '../auth/auth.service';
@@ -316,21 +316,24 @@ export class FileService {
       throw new BadRequestException('filename is required');
     }
 
+    const search = filename.trim();
     const take = 10;
     const skip = (page - 1) * take;
     const threshold = 0.3;
 
-    const query = `
-      SELECT id, "ownerId", "parentId", name, "isFolder", "mimeType", "sizeBytes", "previewS3Key", "createdAt", "updatedAt"
-      FROM files
-      WHERE "ownerId" = $1
-        AND name % $2
-        AND similarity(name, $2) >= $3
-      ORDER BY CASE WHEN $4 = 'name' THEN name ELSE "${orderby}" END DESC, similarity(name, $2) DESC
-      LIMIT $5 OFFSET $6
-    `;
-
-    return this.prisma.$queryRawUnsafe(query, user.id, filename.trim(), threshold, orderby, take, skip) as Promise<any[]>;
+    return this.prisma.$queryRaw(
+      Prisma.sql`
+        SELECT id, "ownerId", "parentId", name, "isFolder", "mimeType", "sizeBytes", "previewS3Key", "createdAt", "updatedAt"
+        FROM files
+        WHERE "ownerId" = ${user.id}
+          AND name % ${search}
+          AND similarity(name, ${search}) >= ${threshold}
+        ORDER BY
+          CASE WHEN ${orderby} = 'name' THEN name ELSE "${orderby}" END DESC,
+          similarity(name, ${search}) DESC
+        LIMIT ${take} OFFSET ${skip}
+      `,
+    ) as Promise<any[]>;
   }
 
   async createPresignedDownloads(

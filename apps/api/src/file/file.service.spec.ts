@@ -60,7 +60,7 @@ describe('FileService', () => {
   let prisma: {
     file: { findUnique: jest.Mock; create: jest.Mock; findMany: jest.Mock; update: jest.Mock; updateMany: jest.Mock; delete: jest.Mock };
     user: { update: jest.Mock };
-    $queryRawUnsafe: jest.Mock;
+    $queryRaw: jest.Mock;
     $transaction: jest.Mock;
   };
   const createPresignedPostMock = createPresignedPost as jest.MockedFunction<typeof createPresignedPost>;
@@ -91,7 +91,7 @@ describe('FileService', () => {
       user: {
         update: jest.fn(),
       },
-      $queryRawUnsafe: jest.fn(),
+      $queryRaw: jest.fn(),
       $transaction: jest.fn(),
     };
 
@@ -457,7 +457,7 @@ describe('FileService', () => {
     it('should fuzzy search files and folders for the owning user', async () => {
       authService.getOrCreateUser.mockResolvedValue(buildUser(UserTier.Free, 0));
       const expectedRows = [{ id: 'doc-1', name: 'Document', ownerId: 'user-1', parentId: null, isFolder: false }];
-      prisma.$queryRawUnsafe.mockResolvedValue(expectedRows);
+      prisma.$queryRaw.mockResolvedValue(expectedRows);
 
       const result = await service.searchFiles(
         { cognitoSub: 'user-1', email: 'user@example.com' },
@@ -466,15 +466,10 @@ describe('FileService', () => {
         'name' as any,
       );
 
-      expect(prisma.$queryRawUnsafe).toHaveBeenCalled();
-      const [query, ownerId, filename, threshold, orderby, take, skip] = prisma.$queryRawUnsafe.mock.calls[0];
-      expect(query).toContain('similarity');
-      expect(ownerId).toBe('user-1');
-      expect(filename).toBe('doc');
-      expect(threshold).toBe(0.3);
-      expect(orderby).toBe('name');
-      expect(take).toBe(10);
-      expect(skip).toBe(10);
+      expect(prisma.$queryRaw).toHaveBeenCalled();
+      const args = prisma.$queryRaw.mock.calls[0];
+      expect(args[0].sql).toContain('similarity');
+      expect(args[0].values).toEqual(expect.arrayContaining(['user-1', 'doc', 0.3, 10, 10]));
       expect(result).toEqual(expectedRows);
     });
   });
