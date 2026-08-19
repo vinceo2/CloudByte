@@ -5,6 +5,7 @@ import { InternalServiceModule } from './internal-service/internal-service.modul
 import { InternalAuthModule } from './internal-auth/internal-auth.module';
 import { UploadMetadataModule } from './upload-metadata/upload-metadata.module';
 import { CompressionJobModule } from './compression-job/compression-job.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -18,5 +19,6 @@ import { CompressionJobModule } from './compression-job/compression-job.module';
     UploadMetadataModule,
     CompressionJobModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}

@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
+import { CompressionJobModule } from '../compression-job/compression-job.module';
+import { InternalAuthModule } from '../internal-auth/internal-auth.module';
 import { UploadMetadataController } from './upload-metadata.controller';
 import { UploadMetadataService } from './upload-metadata.service';
-import { CompressionJobModule } from '../compression-job/compression-job.module';
 
 @Module({
-  imports: [CompressionJobModule],
+  imports: [CompressionJobModule, InternalAuthModule],
   controllers: [UploadMetadataController],
   providers: [UploadMetadataService],
 })
