@@ -5,7 +5,7 @@ import { Prisma, UploadStatus } from '@prisma/client';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AuthService } from '../auth/auth.service';
-import { AuthUser } from 'src/auth/current-user.decorator';
+import { AuthUser } from '../auth/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { FolderSortOrder } from './dto/FolderSortOrder';
 
@@ -321,16 +321,44 @@ export class FileService {
     const skip = (page - 1) * take;
     const threshold = 0.3;
 
+    let orderByClause: Prisma.Sql;
+    switch (orderby) {
+      case FolderSortOrder.Name:
+        orderByClause = Prisma.sql`ORDER BY name DESC, similarity(name, ${search}) DESC`;
+        break;
+      case FolderSortOrder.MimeType:
+        orderByClause = Prisma.sql`ORDER BY mime_type DESC, similarity(name, ${search}) DESC`;
+        break;
+      case FolderSortOrder.SizeBytes:
+        orderByClause = Prisma.sql`ORDER BY size_bytes DESC, similarity(name, ${search}) DESC`;
+        break;
+      case FolderSortOrder.UpdatedAt:
+        orderByClause = Prisma.sql`ORDER BY updated_at DESC, similarity(name, ${search}) DESC`;
+        break;
+      case FolderSortOrder.CreatedAt:
+      default:
+        orderByClause = Prisma.sql`ORDER BY created_at DESC, similarity(name, ${search}) DESC`;
+        break;
+    }
+
     return this.prisma.$queryRaw(
       Prisma.sql`
-        SELECT id, "ownerId", "parentId", name, "isFolder", "mimeType", "sizeBytes", "previewS3Key", "createdAt", "updatedAt"
+        SELECT
+          id,
+          owner_id AS "ownerId",
+          parent_id AS "parentId",
+          name,
+          is_folder AS "isFolder",
+          mime_type AS "mimeType",
+          size_bytes AS "sizeBytes",
+          preview_s3_key AS "previewS3Key",
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
         FROM files
-        WHERE "ownerId" = ${user.id}
+        WHERE owner_id = ${user.id}
           AND name % ${search}
           AND similarity(name, ${search}) >= ${threshold}
-        ORDER BY
-          CASE WHEN ${orderby} = 'name' THEN name ELSE "${orderby}" END DESC,
-          similarity(name, ${search}) DESC
+        ${orderByClause}
         LIMIT ${take} OFFSET ${skip}
       `,
     ) as Promise<any[]>;

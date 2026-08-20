@@ -15,6 +15,22 @@ services:
       timeout: 5s
       retries: 5
 
+  api-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cloudbyte
+      POSTGRES_PASSWORD: cloudbyte
+      POSTGRES_DB: cloudbyte_api
+    ports:
+      - "5433:5432"
+    volumes:
+      - api_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudbyte -d cloudbyte_api"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     ports:
@@ -34,15 +50,18 @@ services:
     env_file:
       - apps/api/.env
     environment:
-      DATABASE_URL: postgresql://cloudbyte:cloudbyte@postgres:5432/cloudbyte
+      DATABASE_URL: postgresql://cloudbyte:cloudbyte@api-postgres:5432/cloudbyte_api
       REDIS_URL: redis://redis:6379
     depends_on:
-      postgres:
+      api-postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
       - ./apps/api/src:/app/apps/api/src
+      - ./apps/api/test:/app/apps/api/test
+      - ./apps/api/prisma:/app/apps/api/prisma
+      - ./apps/api/tsconfig.json:/app/apps/api/tsconfig.json
       - ./packages/shared/src:/app/packages/shared/src
       - ~/.aws:/root/Users/vince/.aws:ro
 
@@ -127,3 +146,4 @@ services:
 
 volumes:
   postgres_data:
+  api_postgres_data:

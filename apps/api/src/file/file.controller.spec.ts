@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 
+import { UploadStatus } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
@@ -25,6 +26,8 @@ const buildFolder = (overrides: Record<string, unknown> = {}) => ({
   sizeBytes: BigInt(0),
   s3Key: null,
   previewS3Key: null,
+  uploadStatus: UploadStatus.PENDING,
+  storageUsedBytes: BigInt(0),
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   ...overrides,
@@ -70,8 +73,8 @@ describe('FileController', () => {
         ],
       };
       const expectedUploads: PresignedUploadResult[] = [
-        { name: 'photo.jpg', key: 'user-123/123-photo.jpg', url: 'https://example.com/upload1' },
-        { name: 'document.pdf', key: 'user-123/123-document.pdf', url: 'https://example.com/upload2' },
+        { fileId: 'upload-1', name: 'photo.jpg', key: 'user-123/123-photo.jpg', url: 'https://example.com/upload1' },
+        { fileId: 'upload-2', name: 'document.pdf', key: 'user-123/123-document.pdf', url: 'https://example.com/upload2' },
       ];
 
       fileService.createPresignedUploads.mockResolvedValue(expectedUploads);
