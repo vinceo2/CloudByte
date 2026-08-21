@@ -13,6 +13,7 @@ COPY apps/internal-api/nest-cli.json ./apps/internal-api/nest-cli.json
 COPY apps/internal-api/prisma ./apps/internal-api/prisma
 COPY apps/internal-api/prisma.config.ts ./apps/internal-api/prisma.config.ts
 COPY apps/internal-api/src ./apps/internal-api/src
+COPY apps/internal-api/test ./apps/internal-api/test
 
 RUN npm install --workspaces --include-workspace-root
 

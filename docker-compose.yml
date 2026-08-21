@@ -65,20 +65,36 @@ services:
       - ./packages/shared/src:/app/packages/shared/src
       - ~/.aws:/root/Users/vince/.aws:ro
 
+  internal-api-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cloudbyte
+      POSTGRES_PASSWORD: cloudbyte
+      POSTGRES_DB: cloudbyte_internal_api
+    ports:
+      - "5434:5432"
+    volumes:
+      - internal_api_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudbyte -d cloudbyte_internal_api"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   internal-api:
     build:
       context: .
       dockerfile: apps/internal-api/Dockerfile
       args:
-        DATABASE_URL: postgresql://cloudbyte:cloudbyte@postgres:5432/cloudbyte
+        DATABASE_URL: postgresql://cloudbyte:cloudbyte@internal-api-postgres:5432/cloudbyte_internal_api
     ports:
       - "4000:4000"
     env_file:
       - apps/internal-api/.env
     environment:
-      DATABASE_URL: postgresql://cloudbyte:cloudbyte@postgres:5432/cloudbyte
+      DATABASE_URL: postgresql://cloudbyte:cloudbyte@internal-api-postgres:5432/cloudbyte_internal_api
     depends_on:
-      postgres:
+      internal-api-postgres:
         condition: service_healthy
     volumes:
       - ./apps/internal-api/src:/app/apps/internal-api/src
@@ -147,3 +163,4 @@ services:
 volumes:
   postgres_data:
   api_postgres_data:
+  internal_api_postgres_data:
