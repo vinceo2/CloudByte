@@ -26,7 +26,6 @@ describe('Internal API (e2e)', () => {
       prisma.file.deleteMany(),
       prisma.user.deleteMany(),
       prisma.internalClient.deleteMany(),
-      prisma.internalService.deleteMany(),
     ]);
 
     const client = await prisma.internalClient.create({
@@ -34,7 +33,7 @@ describe('Internal API (e2e)', () => {
         clientId: 'cloudbyte-internal',
         name: 'CloudByte Internal',
         secretHash: crypto.createHash('sha256').update('super-secret').digest('hex'),
-        permissions: ['services:read', 'services:write', 'services:delete', 'uploads:write', 'uploads:cleanup'],
+        permissions: ['uploads:write', 'uploads:cleanup'],
       },
     });
 
@@ -75,7 +74,6 @@ describe('Internal API (e2e)', () => {
       prisma.file.deleteMany(),
       prisma.user.deleteMany(),
       prisma.internalClient.deleteMany(),
-      prisma.internalService.deleteMany(),
     ]);
   });
 
@@ -92,48 +90,6 @@ describe('Internal API (e2e)', () => {
       status: 'ok',
       service: 'cloudbyte-internal-api',
     });
-  });
-
-  it('GET /internal-services returns services for an authorized client', async () => {
-    await prisma.internalService.create({
-      data: {
-        name: 'File indexer',
-        slug: 'file-indexer',
-        description: 'Indexes uploaded files',
-      },
-    });
-
-    const response = await request(app.getHttpServer())
-      .get('/internal-services')
-      .set(authHeader)
-      .expect(200);
-
-    expect(response.body).toHaveLength(1);
-    expect(response.body[0]).toMatchObject({
-      name: 'File indexer',
-      slug: 'file-indexer',
-    });
-  });
-
-  it('POST /internal-services creates a service for an authorized client', async () => {
-    const response = await request(app.getHttpServer())
-      .post('/internal-services')
-      .set(authHeader)
-      .send({
-        name: 'Compression API',
-        slug: 'compression-api',
-        description: 'Processes image compression jobs',
-      })
-      .expect(201);
-
-    expect(response.body).toMatchObject({
-      name: 'Compression API',
-      slug: 'compression-api',
-      description: 'Processes image compression jobs',
-    });
-
-    const stored = await prisma.internalService.findUnique({ where: { slug: 'compression-api' } });
-    expect(stored).not.toBeNull();
   });
 
   it('POST /upload-metadata records upload processing metadata and updates storage', async () => {
@@ -183,7 +139,14 @@ describe('Internal API (e2e)', () => {
 
   it('rejects missing internal auth credentials', async () => {
     await request(app.getHttpServer())
-      .get('/internal-services')
+      .post('/upload-metadata')
+      .send({
+        bucket: 'cloudbyte-files-dev',
+        key: 'tenant-1/demo.pdf',
+        sizeBytes: 2048,
+        usedBytesDelta: 2048,
+        uploadStatus: 'COMPLETED',
+      })
       .expect(401);
   });
 });

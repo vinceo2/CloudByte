@@ -31,16 +31,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   api:
     build:
       context: .
@@ -51,11 +41,8 @@ services:
       - apps/api/.env
     environment:
       DATABASE_URL: postgresql://cloudbyte:cloudbyte@api-postgres:5432/cloudbyte_api
-      REDIS_URL: redis://redis:6379
     depends_on:
       api-postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     volumes:
       - ./apps/api/src:/app/apps/api/src

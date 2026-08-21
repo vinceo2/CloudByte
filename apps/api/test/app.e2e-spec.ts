@@ -6,7 +6,7 @@ import { AppModule } from './../src/app.module';
 import { JwtAuthGuard } from './../src/auth/jwt-auth.guard';
 import { PrismaService } from './../src/prisma/prisma.service';
 
-describe('AppController (e2e)', () => {
+describe('API (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
 
@@ -63,13 +63,6 @@ describe('AppController (e2e)', () => {
 
   afterAll(async () => {
     await prisma.$disconnect();
-  });
-
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
   });
 
   it('POST /files/folders creates a folder for the authenticated user', async () => {

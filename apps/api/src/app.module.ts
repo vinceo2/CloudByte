@@ -1,7 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { FileModule } from './file/file.module';
 import { HealthController } from './health.controller';
@@ -17,8 +15,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     FileModule,
   ],
-  controllers: [AppController, HealthController],
-  providers: [AppService],
+  controllers: [HealthController],
 })
 export class AppModule {}
 

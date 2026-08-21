@@ -7,7 +7,7 @@ Cloud storage web app with hierarchical file organization, sharing, and previews
 - **Frontend:** React + Vite (`apps/web`)
 - **API:** NestJS (`apps/api`)
 - **Shared types:** `@cloudbyte/shared` (`packages/shared`)
-- **Local services:** PostgreSQL, Redis (Docker Compose)
+- **Local services:** PostgreSQL (Docker Compose)
 - **Cloud:** AWS Cognito (auth), S3 (storage)
 
 ## Prerequisites
