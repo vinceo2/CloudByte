@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, UploadStatus } from '@prisma/client';
 import { CompressionJobService } from '../compression-job/compression-job.service';
+import { IndexingJobService } from '../indexing-job/indexing-job.service';
 
 interface UploadMetadataInput {
   bucket: string;
@@ -19,6 +20,7 @@ export class UploadMetadataService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly compressionJobService: CompressionJobService,
+    private readonly indexingJobService: IndexingJobService,
   ) {}
 
   async processUpload(input: UploadMetadataInput) {
@@ -86,6 +88,17 @@ export class UploadMetadataService {
         storageUsedBytes: nextUsedBytes,
       },
     });
+
+    if (updatedFile.uploadStatus === UploadStatus.COMPLETED) {
+      await this.indexingJobService.enqueueForUpload({
+        fileId: updatedFile.id,
+        ownerId: updatedFile.ownerId,
+        fileName: updatedFile.name,
+        mimeType: updatedFile.mimeType,
+        sourceBucket: input.bucket,
+        sourceKey: updatedFile.s3Key,
+      });
+    }
 
     return {
       fileId: updatedFile.id,

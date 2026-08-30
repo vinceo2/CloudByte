@@ -4,6 +4,7 @@ import { UploadStatus } from '@prisma/client';
 import { UploadMetadataService } from './upload-metadata.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompressionJobService } from '../compression-job/compression-job.service';
+import { IndexingJobService } from '../indexing-job/indexing-job.service';
 
 describe('UploadMetadataService', () => {
   let service: UploadMetadataService;
@@ -48,11 +49,19 @@ describe('UploadMetadataService', () => {
       fail: jest.fn(),
     };
 
+    const indexingJobService = {
+      enqueueForUpload: jest.fn().mockResolvedValue({ skipped: false, job: { jobKey: 'index/file-id' } }),
+      markProcessing: jest.fn(),
+      complete: jest.fn(),
+      fail: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UploadMetadataService,
         { provide: PrismaService, useValue: prisma },
         { provide: CompressionJobService, useValue: compressionJobService },
+        { provide: IndexingJobService, useValue: indexingJobService },
       ],
     }).compile();
 

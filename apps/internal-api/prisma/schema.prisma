@@ -26,6 +26,14 @@ enum CompressionJobStatus {
   FAILED
 }
 
+enum IndexingJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  NOT_ELIGIBLE
+}
+
 model User {
   id               String   @id @default(cuid())
   cognitoSub       String   @unique @map("cognito_sub")
@@ -99,5 +107,45 @@ model CompressionJob {
 
   @@index([status, updatedAt])
   @@map("compression_jobs")
+}
+
+model IndexingJob {
+  id           String            @id @default(cuid())
+  jobKey       String            @unique @map("job_key")
+  fileId       String            @map("file_id")
+  ownerId      String            @map("owner_id")
+  sourceBucket String?           @map("source_bucket")
+  sourceKey    String?           @map("source_key")
+  status       IndexingJobStatus @default(PENDING)
+  reason       String?
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  chunks DocumentChunk[]
+
+  @@index([status, updatedAt])
+  @@index([ownerId, fileId])
+  @@map("indexing_jobs")
+}
+
+model DocumentChunk {
+  id              String                      @id @default(cuid())
+  indexingJobId   String                      @map("indexing_job_id")
+  fileId          String                      @map("file_id")
+  ownerId         String                      @map("owner_id")
+  sourceFileName  String                      @map("source_file_name")
+  chunkIndex      Int                         @map("chunk_index")
+  chunkText       String
+  embedding       Unsupported("vector")?      @db.Vector
+  embeddingModel  String?                     @map("embedding_model")
+  vectorDocId     String?                     @map("vector_doc_id")
+  lastIndexedAt   DateTime                    @default(now()) @map("last_indexed_at")
+  createdAt       DateTime                    @default(now()) @map("created_at")
+
+  indexingJob IndexingJob @relation(fields: [indexingJobId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, fileId])
+  @@index([vectorDocId])
+  @@map("document_chunks")
 }
 

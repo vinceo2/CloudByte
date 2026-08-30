@@ -16,7 +16,7 @@ services:
       retries: 5
 
   api-postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: cloudbyte
       POSTGRES_PASSWORD: cloudbyte
@@ -41,6 +41,7 @@ services:
       - apps/api/.env
     environment:
       DATABASE_URL: postgresql://cloudbyte:cloudbyte@api-postgres:5432/cloudbyte_api
+      VECTOR_DATABASE_URL: postgresql://cloudbyte:cloudbyte@api-postgres:5432/cloudbyte_api
     depends_on:
       api-postgres:
         condition: service_healthy
@@ -53,7 +54,7 @@ services:
       - ~/.aws:/root/Users/vince/.aws:ro
 
   internal-api-postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: cloudbyte
       POSTGRES_PASSWORD: cloudbyte
@@ -106,6 +107,38 @@ services:
       - internal-api
     volumes:
       - ./apps/compression-worker/src:/app/apps/compression-worker/src
+
+  indexing-worker:
+    build:
+      context: .
+      dockerfile: apps/indexing-worker/Dockerfile
+    env_file:
+      - apps/internal-api/.env
+    environment:
+      AWS_REGION: us-east-1
+      INTERNAL_API_URL: http://internal-api:4000
+      INTERNAL_API_CLIENT_ID: ${INTERNAL_API_CLIENT_ID:-}
+      INTERNAL_API_CLIENT_SECRET: ${INTERNAL_API_CLIENT_SECRET:-}
+      INDEXING_WORKER_POLL_INTERVAL_MS: 2000
+    depends_on:
+      - internal-api
+    volumes:
+      - ./apps/indexing-worker/src:/app/src
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: apps/mcp-server/Dockerfile
+    env_file:
+      - apps/mcp-server/.env
+    environment:
+      AWS_REGION: us-east-1
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-}
+      INTERNAL_API_URL: http://internal-api:4000
+      INTERNAL_API_CLIENT_ID: ${INTERNAL_API_CLIENT_ID:-}
+      INTERNAL_API_CLIENT_SECRET: ${INTERNAL_API_CLIENT_SECRET:-}
+    depends_on:
+      - internal-api
 
   web:
     build:

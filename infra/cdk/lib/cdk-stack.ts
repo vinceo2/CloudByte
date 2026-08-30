@@ -199,6 +199,27 @@ export class CloudByteStack extends cdk.Stack {
       securityGroups: [databaseSecurityGroup],
     });
 
+    const vectorDatabase = new rds.DatabaseInstance(this, 'VectorDatabase', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_16,
+      }),
+      vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
+      allocatedStorage: 20,
+      maxAllocatedStorage: 200,
+      databaseName: 'cloudbyte_vector',
+      credentials: rds.Credentials.fromGeneratedSecret('cloudbyteVectorAdmin'),
+      publiclyAccessible: false,
+      storageEncrypted: true,
+      deletionProtection: false,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      backupRetention: cdk.Duration.days(7),
+      securityGroups: [databaseSecurityGroup],
+    });
+
     const cluster = new ecs.Cluster(this, 'Cluster', {
       vpc,
       clusterName: `${appName}-${stage}-cluster`,
@@ -209,6 +230,11 @@ export class CloudByteStack extends cdk.Stack {
     const databaseUsername = databaseSecret?.secretValueFromJson('username').unsafeUnwrap() ?? 'cloudbyteAdmin';
     const databasePassword = databaseSecret?.secretValueFromJson('password').unsafeUnwrap() ?? 'cloudbyte';
     const databaseUrl = `postgresql://${databaseUsername}:${databasePassword}@${database.instanceEndpoint.hostname}:5432/cloudbyte`;
+
+    const vectorDatabaseSecret = vectorDatabase.secret;
+    const vectorDatabaseUsername = vectorDatabaseSecret?.secretValueFromJson('username').unsafeUnwrap() ?? 'cloudbyteVectorAdmin';
+    const vectorDatabasePassword = vectorDatabaseSecret?.secretValueFromJson('password').unsafeUnwrap() ?? 'cloudbyte';
+    const vectorDatabaseUrl = `postgresql://${vectorDatabaseUsername}:${vectorDatabasePassword}@${vectorDatabase.instanceEndpoint.hostname}:5432/cloudbyte_vector`;
 
     const apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'ApiService', {
       cluster,
@@ -296,6 +322,41 @@ export class CloudByteStack extends cdk.Stack {
       healthyHttpCodes: '200-399',
     });
 
+    const mcpServerTask = new ecs.FargateTaskDefinition(this, 'McpServerTask', {
+      cpu: 256,
+      memoryLimitMiB: 512,
+    });
+
+    mcpServerTask.addContainer('McpServer', {
+      image: ecs.ContainerImage.fromAsset(repoRoot, {
+        file: 'apps/mcp-server/Dockerfile',
+        exclude: ['infra/cdk', 'node_modules', '.git'],
+      }),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'cloudbyte-mcp-server',
+        logRetention: logs.RetentionDays.TWO_WEEKS,
+      }),
+      environment: {
+        AWS_REGION: this.region,
+        AWS_S3_BUCKET: filesBucket.bucketName,
+        INTERNAL_API_URL: `http://${internalApiService.loadBalancer.loadBalancerDnsName}`,
+        INTERNAL_API_CLIENT_ID: 'replace-me',
+        INTERNAL_API_CLIENT_SECRET: 'replace-me',
+        VECTOR_DATABASE_URL: vectorDatabaseUrl,
+      },
+    });
+
+    new ecs.FargateService(this, 'McpServerService', {
+      cluster,
+      taskDefinition: mcpServerTask,
+      desiredCount: 1,
+      assignPublicIp: false,
+      circuitBreaker: {
+        rollback: true,
+      },
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
     const workerTask = new ecs.FargateTaskDefinition(this, 'CompressionWorkerTask', {
       cpu: 256,
       memoryLimitMiB: 512,
@@ -380,6 +441,9 @@ export class CloudByteStack extends cdk.Stack {
     internalApiService.taskDefinition.taskRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'),
     );
+    mcpServerTask.taskRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'),
+    );
     workerTask.taskRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'),
     );
@@ -388,6 +452,8 @@ export class CloudByteStack extends cdk.Stack {
     previewsBucket.grantReadWrite(apiService.taskDefinition.taskRole);
     filesBucket.grantReadWrite(internalApiService.taskDefinition.taskRole);
     previewsBucket.grantReadWrite(internalApiService.taskDefinition.taskRole);
+    filesBucket.grantReadWrite(mcpServerTask.taskRole);
+    previewsBucket.grantReadWrite(mcpServerTask.taskRole);
     filesBucket.grantReadWrite(workerTask.taskRole);
     previewsBucket.grantReadWrite(workerTask.taskRole);
     compressionQueue.grantSendMessages(apiService.taskDefinition.taskRole);
@@ -423,9 +489,19 @@ export class CloudByteStack extends cdk.Stack {
       description: 'RDS PostgreSQL hostname',
     });
 
+    new cdk.CfnOutput(this, 'VectorDatabaseEndpoint', {
+      value: vectorDatabase.instanceEndpoint.hostname,
+      description: 'RDS PostgreSQL hostname for the vector store',
+    });
+
     new cdk.CfnOutput(this, 'DatabaseSecretArn', {
       value: database.secret?.secretArn ?? '',
       description: 'Secret ARN containing the database credentials',
+    });
+
+    new cdk.CfnOutput(this, 'VectorDatabaseSecretArn', {
+      value: vectorDatabase.secret?.secretArn ?? '',
+      description: 'Secret ARN containing the vector store database credentials',
     });
 
     new cdk.CfnOutput(this, 'WebUrl', {
@@ -441,6 +517,11 @@ export class CloudByteStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'InternalApiUrl', {
       value: `http://${internalApiService.loadBalancer.loadBalancerDnsName}`,
       description: 'Private/internal API URL used by the worker and Lambdas',
+    });
+
+    new cdk.CfnOutput(this, 'McpServerTaskName', {
+      value: 'McpServerService',
+      description: 'ECS Fargate service name for the Python MCP server',
     });
   }
 }

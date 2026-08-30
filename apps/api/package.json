@@ -28,6 +28,7 @@
     "@aws-sdk/s3-presigned-post": "^3.1094.0",
     "@aws-sdk/s3-request-presigner": "^3.1094.0",
     "@cloudbyte/shared": "*",
+    "@langchain/openai": "^1.5.10",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",

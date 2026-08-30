@@ -4,6 +4,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { InternalAuthModule } from './internal-auth/internal-auth.module';
 import { UploadMetadataModule } from './upload-metadata/upload-metadata.module';
 import { CompressionJobModule } from './compression-job/compression-job.module';
+import { IndexingJobModule } from './indexing-job/indexing-job.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -16,6 +17,7 @@ import { HealthController } from './health.controller';
     InternalAuthModule,
     UploadMetadataModule,
     CompressionJobModule,
+    IndexingJobModule,
   ],
   controllers: [HealthController],
 })

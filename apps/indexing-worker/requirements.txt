@@ -1,0 +1,4 @@
+boto3==1.40.0
+requests==2.32.2
+python-dotenv==1.1.1
+openai==1.60.2
