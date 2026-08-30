@@ -121,6 +121,12 @@ export class CloudByteStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    const indexingQueue = new sqs.Queue(this, 'IndexingQueue', {
+      queueName: `${appName}-indexing-${stage}`,
+      visibilityTimeout: cdk.Duration.minutes(5),
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const webBucket = new s3.Bucket(this, 'WebBucket', {
       bucketName: `${appName}-web-${stage}-${this.account}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -383,6 +389,41 @@ export class CloudByteStack extends cdk.Stack {
       },
     });
 
+    const indexingWorkerTask = new ecs.FargateTaskDefinition(this, 'IndexingWorkerTask', {
+      cpu: 256,
+      memoryLimitMiB: 512,
+    });
+
+    indexingWorkerTask.addContainer('IndexingWorker', {
+      image: ecs.ContainerImage.fromAsset(repoRoot, {
+        file: 'apps/indexing-worker/Dockerfile',
+        exclude: ['infra/cdk', 'node_modules', '.git'],
+      }),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'cloudbyte-indexing-worker',
+        logRetention: logs.RetentionDays.TWO_WEEKS,
+      }),
+      environment: {
+        AWS_REGION: this.region,
+        INDEXING_QUEUE_URL: indexingQueue.queueUrl,
+        INTERNAL_API_URL: `http://${internalApiService.loadBalancer.loadBalancerDnsName}`,
+        INTERNAL_API_CLIENT_ID: 'replace-me',
+        INTERNAL_API_CLIENT_SECRET: 'replace-me',
+        INDEXING_WORKER_POLL_INTERVAL_MS: '2000',
+      },
+    });
+
+    new ecs.FargateService(this, 'IndexingWorkerService', {
+      cluster,
+      taskDefinition: indexingWorkerTask,
+      desiredCount: 1,
+      assignPublicIp: false,
+      circuitBreaker: {
+        rollback: true,
+      },
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    });
+
     new ecs.FargateService(this, 'CompressionWorkerService', {
       cluster,
       taskDefinition: workerTask,
@@ -405,6 +446,7 @@ export class CloudByteStack extends cdk.Stack {
         INTERNAL_API_CLIENT_ID: 'replace-me',
         INTERNAL_API_CLIENT_SECRET: 'replace-me',
         COMPRESSION_QUEUE_URL: compressionQueue.queueUrl,
+        INDEXING_QUEUE_URL: indexingQueue.queueUrl,
         UPLOAD_SIZE_THRESHOLD_BYTES: '20971520',
       },
     });
@@ -416,6 +458,7 @@ export class CloudByteStack extends cdk.Stack {
 
     filesBucket.grantRead(uploadMetadataLambda);
     compressionQueue.grantSendMessages(uploadMetadataLambda);
+    indexingQueue.grantSendMessages(uploadMetadataLambda);
 
     const cleanupLambda = new lambda.Function(this, 'PendingFileCleanupLambda', {
       runtime: lambda.Runtime.PYTHON_3_12,
@@ -447,6 +490,9 @@ export class CloudByteStack extends cdk.Stack {
     workerTask.taskRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'),
     );
+    indexingWorkerTask.taskRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3FullAccess'),
+    );
 
     filesBucket.grantReadWrite(apiService.taskDefinition.taskRole);
     previewsBucket.grantReadWrite(apiService.taskDefinition.taskRole);
@@ -458,6 +504,7 @@ export class CloudByteStack extends cdk.Stack {
     previewsBucket.grantReadWrite(workerTask.taskRole);
     compressionQueue.grantSendMessages(apiService.taskDefinition.taskRole);
     compressionQueue.grantConsumeMessages(workerTask.taskRole);
+    indexingQueue.grantConsumeMessages(indexingWorkerTask.taskRole);
 
     new cdk.CfnOutput(this, 'UserPoolId', {
       value: userPool.userPoolId,
@@ -482,6 +529,11 @@ export class CloudByteStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'CompressionQueueUrl', {
       value: compressionQueue.queueUrl,
       description: 'SQS queue used by the compression worker',
+    });
+
+    new cdk.CfnOutput(this, 'IndexingQueueUrl', {
+      value: indexingQueue.queueUrl,
+      description: 'SQS queue used by the indexing worker',
     });
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {

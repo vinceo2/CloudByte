@@ -32,6 +32,10 @@ def _get_compression_queue_url() -> str:
     return os.getenv("COMPRESSION_QUEUE_URL", "")
 
 
+def _get_indexing_queue_url() -> str:
+    return os.getenv("INDEXING_QUEUE_URL", "")
+
+
 def _get_aws_region() -> str:
     return os.getenv("AWS_REGION", "us-east-1")
 
@@ -154,6 +158,51 @@ def _queue_compression_message(bucket_name: str, object_key: str, size_bytes: in
     return response
 
 
+def _queue_indexing_message(bucket_name: str, object_key: str, size_bytes: int, mime_type: str, file_id: str, owner_id: str, file_name: str) -> Dict[str, Any]:
+    indexing_queue_url = _get_indexing_queue_url()
+    if not indexing_queue_url:
+        raise RuntimeError("INDEXING_QUEUE_URL environment variable is required for eligible text uploads")
+
+    job_key = f"index/{file_id}"
+    queue_payload = {
+        "jobKey": job_key,
+        "fileId": file_id,
+        "ownerId": owner_id,
+        "fileName": file_name,
+        "mimeType": mime_type,
+        "sourceBucket": bucket_name,
+        "sourceKey": object_key,
+        "sizeBytes": int(size_bytes),
+        "source": "s3-upload-metadata-lambda",
+        "status": "PENDING_INDEXING",
+        "queuedAt": datetime.now(timezone.utc).isoformat(),
+    }
+
+    sqs_client = boto3.client("sqs", region_name=_get_aws_region())
+    params: Dict[str, Any] = {
+        "QueueUrl": indexing_queue_url,
+        "MessageBody": json.dumps(queue_payload),
+    }
+
+    if indexing_queue_url.endswith(".fifo"):
+        params["MessageGroupId"] = "indexing-worker"
+        params["MessageDeduplicationId"] = f"{file_id}:{object_key}:{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+
+    response = sqs_client.send_message(**params)
+    return response
+
+
+def _is_indexing_eligible(mime_type: str, object_key: str) -> bool:
+    extension = os.path.splitext(object_key)[1].lower()
+    supported_extensions = {".txt", ".md", ".csv", ".json"}
+    if extension in supported_extensions:
+        return True
+    if not mime_type:
+        return False
+    normalized = mime_type.lower()
+    return normalized.startswith("text/") or normalized in {"application/json", "application/csv", "application/x-javascript", "application/javascript"}
+
+
 def _process_record(record: Dict[str, Any]) -> Dict[str, Any]:
     s3_data = record.get("s3", {})
     bucket_name = s3_data.get("bucket", {}).get("name")
@@ -174,6 +223,24 @@ def _process_record(record: Dict[str, Any]) -> Dict[str, Any]:
             size_bytes,
             mime_type or "unknown",
         )
+
+        if _is_indexing_eligible(mime_type, object_key):
+            file_id = metadata_response.get("fileId")
+            owner_id = metadata_response.get("ownerId")
+            file_name = metadata_response.get("fileName") or os.path.basename(object_key)
+            if file_id and owner_id:
+                indexing_response = _queue_indexing_message(bucket_name, object_key, size_bytes, mime_type, file_id, owner_id, file_name)
+                LOG.info("Queued indexing for eligible text upload %s/%s", bucket_name, object_key)
+                return {
+                    "bucket": bucket_name,
+                    "key": object_key,
+                    "sizeBytes": size_bytes,
+                    "uploadStatus": "COMPLETED",
+                    "mimeType": mime_type,
+                    "metadataApi": metadata_response,
+                    "indexingQueue": indexing_response,
+                }
+
         return {
             "bucket": bucket_name,
             "key": object_key,

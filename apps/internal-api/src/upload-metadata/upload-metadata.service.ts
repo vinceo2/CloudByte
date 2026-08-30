@@ -102,6 +102,9 @@ export class UploadMetadataService {
 
     return {
       fileId: updatedFile.id,
+      ownerId: updatedFile.ownerId,
+      fileName: updatedFile.name,
+      mimeType: updatedFile.mimeType ?? null,
       s3Key: updatedFile.s3Key,
       uploadStatus: updatedFile.uploadStatus,
       sizeBytes: Number(updatedFile.sizeBytes),
