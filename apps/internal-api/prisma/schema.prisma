@@ -136,7 +136,7 @@ model DocumentChunk {
   sourceFileName  String                      @map("source_file_name")
   chunkIndex      Int                         @map("chunk_index")
   chunkText       String
-  embedding       Unsupported("vector")?      @db.Vector
+  embedding       Unsupported("vector")?
   embeddingModel  String?                     @map("embedding_model")
   vectorDocId     String?                     @map("vector_doc_id")
   lastIndexedAt   DateTime                    @default(now()) @map("last_indexed_at")

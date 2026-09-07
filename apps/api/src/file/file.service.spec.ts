@@ -129,7 +129,7 @@ describe('FileService', () => {
           [{ name: 'photo.jpg', sizeBytes: 1024 }],
         );
 
-        expect(result).toEqual([{ fileId: 'file-1', name: 'photo.jpg', key: expect.any(String), url: 'https://example.com/upload' }]);
+        expect(result).toEqual([{ fileId: 'file-1', name: 'photo.jpg', key: expect.any(String), url: 'https://example.com/upload', fields: {} }]);
         expect(createPresignedPostMock).toHaveBeenCalled();
         expect(prisma.file.create).toHaveBeenCalled();
       },

@@ -1,0 +1,1 @@
+CloudByte AWS smoke test fixture. This document mentions the unique marker CLOUDBYTE_SMOKE_MARKER for RAG retrieval verification.

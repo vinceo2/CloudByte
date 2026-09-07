@@ -73,8 +73,8 @@ describe('FileController', () => {
         ],
       };
       const expectedUploads: PresignedUploadResult[] = [
-        { fileId: 'upload-1', name: 'photo.jpg', key: 'user-123/123-photo.jpg', url: 'https://example.com/upload1' },
-        { fileId: 'upload-2', name: 'document.pdf', key: 'user-123/123-document.pdf', url: 'https://example.com/upload2' },
+        { fileId: 'upload-1', name: 'photo.jpg', key: 'user-123/123-photo.jpg', url: 'https://example.com/upload1', fields: { key: 'user-123/123-photo.jpg' } },
+        { fileId: 'upload-2', name: 'document.pdf', key: 'user-123/123-document.pdf', url: 'https://example.com/upload2', fields: { key: 'user-123/123-document.pdf' } },
       ];
 
       fileService.createPresignedUploads.mockResolvedValue(expectedUploads);
@@ -144,6 +144,7 @@ describe('FileController', () => {
           parentId: folderId,
           name: 'File A',
           isFolder: false,
+          uploadStatus: UploadStatus.PENDING,
           mimeType: 'text/plain',
           sizeBytes: 123,
           previewS3Key: null,

@@ -10,7 +10,7 @@ export class PrismaService
     super({
       datasources: {
         db: {
-          url: process.env.VECTOR_DATABASE_URL ?? process.env.DATABASE_URL,
+          url: process.env.DATABASE_URL,
         },
       },
     });

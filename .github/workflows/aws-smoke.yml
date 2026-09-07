@@ -1,0 +1,45 @@
+name: aws-smoke
+
+# Runs the AWS-only smoke test suite (apps/api/test/aws) against a dedicated,
+# already-deployed AWS stage (e.g. dev-e2e). This is intentionally separate
+# from the normal unit/e2e jobs: it never runs on every push, only when
+# explicitly requested, and it requires real AWS credentials + a live stack.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 6 * * *' # nightly against the dedicated dev-e2e stage
+
+jobs:
+  aws-smoke:
+    runs-on: ubuntu-latest
+    environment: aws-e2e
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_SMOKE_TEST_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_TEST_REGION }}
+
+      - name: Run AWS smoke suite
+        working-directory: apps/api
+        env:
+          AWS_TEST_MODE: 'true'
+          AWS_TEST_API_URL: ${{ vars.AWS_TEST_API_URL }}
+          AWS_TEST_REGION: ${{ vars.AWS_TEST_REGION }}
+          AWS_TEST_COGNITO_USER_POOL_ID: ${{ vars.AWS_TEST_COGNITO_USER_POOL_ID }}
+          AWS_TEST_COGNITO_CLIENT_ID: ${{ vars.AWS_TEST_COGNITO_CLIENT_ID }}
+          AWS_TEST_COGNITO_USERNAME: ${{ secrets.AWS_SMOKE_TEST_USERNAME }}
+          AWS_TEST_COGNITO_PASSWORD: ${{ secrets.AWS_SMOKE_TEST_PASSWORD }}
+          AWS_TEST_FILES_BUCKET: ${{ vars.AWS_TEST_FILES_BUCKET }}
+          AWS_TEST_PREVIEWS_BUCKET: ${{ vars.AWS_TEST_PREVIEWS_BUCKET }}
+        run: npm run test:aws

@@ -18,6 +18,9 @@ export class FolderResponseDto {
   isFolder!: boolean;
 
   @Expose()
+  uploadStatus!: string;
+
+  @Expose()
   mimeType?: string | null;
 
   @Expose()

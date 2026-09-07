@@ -14,6 +14,7 @@ export interface PresignedUploadResult {
   name: string;
   key: string;
   url: string;
+  fields: Record<string, string>;
 }
 
 export interface PresignedDownloadResult {
@@ -106,6 +107,7 @@ export class FileService {
           name: file.name,
           key,
           url: presignedPost.url,
+          fields: presignedPost.fields,
         };
       }),
     );

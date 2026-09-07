@@ -29,13 +29,13 @@ export class VectorSearchService {
     return embeddings.embedQuery(question);
   }
 
-  private async fallbackKeywordSearch(question: string, userId: string, options: SearchOptions = {}) {
+  private async fallbackKeywordSearch(question: string, userId: string, options: SearchOptions = {}): Promise<IndexChunkHit[]> {
     const documentChunkModel = (this.prisma as any).documentChunk;
     if (!documentChunkModel?.findMany) {
       return [];
     }
 
-    const chunks = await documentChunkModel.findMany({
+    const chunks: Array<{ fileId: string; sourceFileName: string; chunkText: string }> = await documentChunkModel.findMany({
       where: {
         ownerId: userId,
         ...(options.fileIds && options.fileIds.length > 0 ? { fileId: { in: options.fileIds } } : {}),
@@ -66,7 +66,7 @@ export class VectorSearchService {
       .slice(0, options.limit ?? 5);
   }
 
-  async searchRelevantChunks(authUser: AuthUser, question: string, options: SearchOptions = {}) {
+  async searchRelevantChunks(authUser: AuthUser, question: string, options: SearchOptions = {}): Promise<IndexChunkHit[]> {
     const user = await this.prisma.user.findUnique({
       where: { cognitoSub: authUser.cognitoSub },
       select: { id: true },

@@ -11,7 +11,7 @@ INTERNAL_API_CLIENT_SECRET = os.getenv('INTERNAL_API_CLIENT_SECRET', '')
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
 AWS_S3_BUCKET = os.getenv('AWS_S3_BUCKET', '')
 
-mcp = FastMCP('cloudbyte-tools')
+mcp = FastMCP('cloudbyte-tools', host='0.0.0.0', port=int(os.getenv('PORT', '8000')))
 
 session = boto3.session.Session()
 s3_client = session.client('s3', region_name=AWS_REGION)
@@ -135,4 +135,4 @@ def fetch_document_metadata(file_id: str, owner_id: Optional[str] = None) -> Dic
 
 
 if __name__ == '__main__':
-    mcp.run()
+    mcp.run(transport='streamable-http')

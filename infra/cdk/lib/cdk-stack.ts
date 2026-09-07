@@ -16,6 +16,7 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as s3Notifications from 'aws-cdk-lib/aws-s3-notifications';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
@@ -242,6 +243,12 @@ export class CloudByteStack extends cdk.Stack {
     const vectorDatabasePassword = vectorDatabaseSecret?.secretValueFromJson('password').unsafeUnwrap() ?? 'cloudbyte';
     const vectorDatabaseUrl = `postgresql://${vectorDatabaseUsername}:${vectorDatabasePassword}@${vectorDatabase.instanceEndpoint.hostname}:5432/cloudbyte_vector`;
 
+    const openAiSecret = secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'OpenAiSecret',
+      `cloudbyte/${stage}/openai-api-key`,
+    );
+
     const apiService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'ApiService', {
       cluster,
       cpu: 256,
@@ -269,6 +276,9 @@ export class CloudByteStack extends cdk.Stack {
           COGNITO_USER_POOL_ID: userPool.userPoolId,
           COGNITO_CLIENT_ID: userPoolClient.userPoolClientId,
           DATABASE_URL: databaseUrl,
+        },
+        secrets: {
+          OPENAI_API_KEY: ecs.Secret.fromSecretsManager(openAiSecret, 'OPENAI_API_KEY'),
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: 'cloudbyte-api',
@@ -411,6 +421,9 @@ export class CloudByteStack extends cdk.Stack {
         INTERNAL_API_CLIENT_SECRET: 'replace-me',
         INDEXING_WORKER_POLL_INTERVAL_MS: '2000',
       },
+      secrets: {
+        OPENAI_API_KEY: ecs.Secret.fromSecretsManager(openAiSecret, 'OPENAI_API_KEY'),
+      },
     });
 
     new ecs.FargateService(this, 'IndexingWorkerService', {
@@ -505,6 +518,9 @@ export class CloudByteStack extends cdk.Stack {
     compressionQueue.grantSendMessages(apiService.taskDefinition.taskRole);
     compressionQueue.grantConsumeMessages(workerTask.taskRole);
     indexingQueue.grantConsumeMessages(indexingWorkerTask.taskRole);
+
+    openAiSecret.grantRead(apiService.taskDefinition.obtainExecutionRole());
+    openAiSecret.grantRead(indexingWorkerTask.obtainExecutionRole());
 
     new cdk.CfnOutput(this, 'UserPoolId', {
       value: userPool.userPoolId,
